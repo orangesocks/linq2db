@@ -90,8 +90,10 @@ namespace Tests.UserTests
 								   }).FirstOrDefault()
 							  }).ToList();
 
-				if (db is DataConnection)
-					Console.WriteLine(((DataConnection)db).LastQuery);
+#if !APPVEYOR
+				if (db is DataConnection connection)
+					Console.WriteLine(connection.LastQuery);
+#endif
 
 				var expected = from sep in Parent
 							   select new
@@ -126,8 +128,10 @@ namespace Tests.UserTests
 								   }).FirstOrDefault()
 							  }).ToList();
 
-				if (db is DataConnection)
-					Console.WriteLine(((DataConnection)db).LastQuery);
+#if !APPVEYOR
+				if (db is DataConnection connection)
+					Console.WriteLine(connection.LastQuery);
+#endif
 
 				var expected = from sep in Parent
 							   select new
@@ -162,8 +166,10 @@ namespace Tests.UserTests
 								   }).FirstOrDefault()
 							  }).ToList();
 
-				if (db is DataConnection)
-					Console.WriteLine(((DataConnection)db).LastQuery);
+#if !APPVEYOR
+				if (db is DataConnection connection)
+					Console.WriteLine(connection.LastQuery);
+#endif
 
 				var expected = from sep in Parent
 							   select new ValueValueHolder
@@ -198,8 +204,10 @@ namespace Tests.UserTests
 								   }).FirstOrDefault()
 							  }).ToList();
 
-				if (db is DataConnection)
-					Console.WriteLine(((DataConnection)db).LastQuery);
+#if !APPVEYOR
+				if (db is DataConnection connection)
+					Console.WriteLine(connection.LastQuery);
+#endif
 
 				var expected = from sep in Parent
 							   select new ValueValueHolder
@@ -218,7 +226,7 @@ namespace Tests.UserTests
 		}
 
 		// Sybase do not supports limiting subqueries
-		[Test, DataContextSource(true, ProviderName.Sybase, ProviderName.Informix)]
+		[Test, DataContextSource(true, ProviderName.Sybase, ProviderName.SybaseManaged, ProviderName.Informix)]
 		public void SelectPlainTest1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -226,15 +234,17 @@ namespace Tests.UserTests
 				var expected =    Parent.Select(p =>    Child.Select(c => c.ParentID + 1).FirstOrDefault());
 				var result   = db.Parent.Select(p => db.Child.Select(c => c.ParentID + 1).FirstOrDefault());
 
-				if (db is DataConnection)
-					Console.WriteLine(((DataConnection)db).LastQuery);
+#if !APPVEYOR
+				if (db is DataConnection connection)
+					Console.WriteLine(connection.LastQuery);
+#endif
 
 				AreEqual(expected, result);
 			}
 		}
 
 		// Sybase do not supports limiting subqueries
-		[Test, DataContextSource(true, ProviderName.Sybase, ProviderName.Informix)]
+		[Test, DataContextSource(true, ProviderName.Sybase, ProviderName.SybaseManaged, ProviderName.Informix)]
 		public void SelectPlainTest2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -242,8 +252,10 @@ namespace Tests.UserTests
 				var expected =    Parent.Select(p => new { Id = p.ParentID, V =    Child.Select(c => c.ParentID + 1).FirstOrDefault() }).ToList().Select(_ => _.V);
 				var result   = db.Parent.Select(p => new { Id = p.ParentID, V = db.Child.Select(c => c.ParentID + 1).FirstOrDefault() }).ToList().Select(_ => _.V);
 
-				if (db is DataConnection)
-					Console.WriteLine(((DataConnection)db).LastQuery);
+#if !APPVEYOR
+				if (db is DataConnection connection)
+					Console.WriteLine(connection.LastQuery);
+#endif
 
 				AreEqual(expected, result);
 			}

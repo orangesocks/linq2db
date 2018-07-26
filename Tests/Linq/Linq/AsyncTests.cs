@@ -10,6 +10,7 @@ using NUnit.Framework;
 namespace Tests.Linq
 {
 	using Model;
+	using UserTests;
 
 	[TestFixture]
 	public class AsyncTests : TestBase
@@ -132,6 +133,34 @@ namespace Tests.Linq
 				var r = await db.Person.ContainsAsync(p);
 
 				Assert.That(r, Is.True);
+			}
+		}
+
+		[Test, DataContextSource]
+		public async Task TestFirstOrDefault(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var param = 4;
+				var resultQuery =
+						from o in db.Parent
+						where Sql.Ext.In(o.ParentID, 1, 2, 3, (int?)null) || o.ParentID == param
+						select o;
+
+				var zz = await resultQuery.FirstOrDefaultAsync();
+			}
+		}
+
+		[Test, DataContextSource]
+		public async Task TakeSkipTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var resultQuery = db.Parent.OrderBy(p => p.ParentID).Skip(1).Take(2);
+
+				AreEqual(
+					resultQuery.ToArray(),
+					await resultQuery.ToArrayAsync());
 			}
 		}
 	}

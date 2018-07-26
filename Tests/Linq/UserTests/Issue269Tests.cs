@@ -10,12 +10,13 @@ namespace Tests.UserTests
 		class TestDataContextSourceAttribute : DataContextSourceAttribute
 		{
 			public TestDataContextSourceAttribute() : base(
-				ProviderName.Access, ProviderName.SQLite, ProviderName.Oracle,
-				ProviderName.MySql, ProviderName.Sybase, 
+				ProviderName.Access, ProviderName.SQLiteClassic, ProviderName.Oracle,
+				ProviderName.MySql, ProviderName.Sybase, ProviderName.SybaseManaged,
 				ProviderName.OracleNative, ProviderName.OracleManaged,
 				ProviderName.DB2,
+				ProviderName.SqlCe,
 				TestProvName.MySql57,
-				TestProvName.SQLiteMs, ProviderName.SqlServer2000, TestProvName.MariaDB)
+				ProviderName.SQLiteMS, ProviderName.SqlServer2000, TestProvName.MariaDB)
 			{
 			}
 		}
@@ -39,7 +40,7 @@ namespace Tests.UserTests
 						.OrderByDescending(per => per.FirstName)
 						.Select(c => c.Patient.Diagnosis)
 						.Take(1)
-						.Any(_ => _.Contains("with"))); 
+						.Any(_ => _.Contains("with")));
 
 				AreEqual(e, q);
 			}
@@ -57,6 +58,9 @@ namespace Tests.UserTests
 						.Select(c => c.Patient.Diagnosis)
 						.Distinct()
 						.Any(_ => _.Contains("with")));
+
+				// DISTINCT should be optimized out
+				Assert.That(q.EnumQueries().All(x => !x.Select.IsDistinct), Is.True);
 
 				var e = Patient
 					.Where(pat => Person

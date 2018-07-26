@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 using System.Windows.Forms;
 #endif
 
@@ -455,7 +455,7 @@ namespace Tests.Linq
 					from p in db.Parent select new { Max = GetList(p.ParentID).Max() });
 		}
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 		[Test, DataContextSource]
 		public void ConstractClass(string context)
 		{
@@ -533,14 +533,14 @@ namespace Tests.Linq
 		{
 			public class Factory : IObjectFactory
 			{
-#region IObjectFactory Members
+				#region IObjectFactory Members
 
 				public object CreateInstance(TypeAccessor typeAccessor)
 				{
 					return typeAccessor.CreateInstance();
 				}
 
-#endregion
+				#endregion
 			}
 
 			public int    PersonID;
@@ -630,9 +630,9 @@ namespace Tests.Linq
 			{
 				var r = db.GetTable<ComplexPerson>().First(_ => _.ID == 1);
 
-				Assert.IsNotEmpty(r.Name.FirstName);
-				Assert.IsNotEmpty(r.Name.MiddleName);
-				Assert.IsNotEmpty(r.Name.LastName);
+				Assert.AreEqual("John", r.Name.FirstName);
+				Assert.IsNull(r.Name.MiddleName);
+				Assert.AreEqual("Pupkin", r.Name.LastName);
 			}
 		}
 
@@ -643,9 +643,9 @@ namespace Tests.Linq
 			{
 				var r = db.GetTable<ComplexPerson2>().First(_ => _.ID == 1);
 
-				Assert.IsNotEmpty(r.Name.FirstName);
-				Assert.IsNotEmpty(r.Name.MiddleName);
-				Assert.IsNotEmpty(r.Name.LastName);
+				Assert.AreEqual("John", r.Name.FirstName);
+				Assert.IsNull(r.Name.MiddleName);
+				Assert.AreEqual("Pupkin", r.Name.LastName);
 			}
 		}
 
@@ -666,9 +666,9 @@ namespace Tests.Linq
 			{
 				var r = db.GetTable<ComplexPerson3>().First(_ => _.ID == 1);
 
-				Assert.IsNotEmpty(r.Name.FirstName);
-				Assert.IsNotEmpty(r.Name.MiddleName);
-				Assert.IsNotEmpty(r.Name.LastName);
+				Assert.AreEqual("John", r.Name.FirstName);
+				Assert.IsNull(r.Name.MiddleName);
+				Assert.AreEqual("Pupkin", r.Name.LastName);
 			}
 		}
 
@@ -713,6 +713,104 @@ namespace Tests.Linq
 				{
 					db.Types2.Where(_ => _.ID == 1000).Delete();
 				}
+			}
+		}
+
+		[Test, DataContextSource(ParallelScope = ParallelScope.None)]
+		public void SelectNullPropagationTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var query1 = from p in db.Parent
+					select new
+					{
+						Info = p != null ? new { p.ParentID, p.Value1 } : null
+					};
+
+				var query2 = from q in query1
+					select new
+					{
+						q.Info.ParentID
+					};
+
+				var result = query2.ToArray();
+			}
+		}
+
+		[Test, DataContextSource(ParallelScope = ParallelScope.None)]
+		public void SelectNullPropagationWhereTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var query1 = from p in db.Parent
+					from c in db.Child.InnerJoin(c => c.ParentID == p.ParentID)
+					select new
+					{
+						Info1 = p != null ? new { p.ParentID, p.Value1 } : null,
+						Info2 = c != null ? (c.Parent != null ? new { c.Parent.Value1 } : null) : null
+					};
+
+				var query2 = from q in query1
+					select new
+					{
+						InfoAll = q == null
+							? null
+							: new
+							{
+								ParentID = q.Info1 != null ? (int?)q.Info1.ParentID : (int?)null,
+								q.Info1.Value1,
+								Value2 = q.Info2.Value1
+							}
+					};
+
+				var query3 = query2.Where(p => p.InfoAll.ParentID.Value > 0 || p.InfoAll.Value1 > 0  || p.InfoAll.Value2 > 0 );
+
+				var result = query3.ToArray();
+			}
+		}
+
+		[Test, DataContextSource]
+		public void SelectNullPropagationTest2(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				AreEqual(
+					from p in Parent
+					join c in Child on p.Value1 equals c.ParentID into gr
+					from c in gr.DefaultIfEmpty()
+					select new
+					{
+						Info2 = c != null ? (c.Parent != null ? new { c.Parent.Value1 } : null) : null
+					}
+					,
+					from p in db.Parent
+					join c in db.Child on p.Value1 equals c.ParentID into gr
+					from c in gr.DefaultIfEmpty()
+					select new
+					{
+						Info2 = c != null ? (c.Parent != null ? new { c.Parent.Value1 } : null) : null
+					});
+			}
+		}
+
+		[Test, DataContextSource(ParallelScope = ParallelScope.None)]
+		public void SelectNullProjectionTests(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var actual = from p in db.Parent
+					select new
+					{
+						V1 = p.Value1.HasValue ? p.Value1 : null,
+					};
+
+				var expected = from p in Parent
+					select new
+					{
+						V1 = p.Value1.HasValue ? p.Value1 : null,
+					};
+
+				AreEqual(expected, actual);
 			}
 		}
 

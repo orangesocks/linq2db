@@ -231,7 +231,7 @@ namespace Tests.xUpdate
 					throw new NotImplementedException();
 				}
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6
 				ISchemaProvider IDataProvider.GetSchemaProvider()
 				{
 					throw new NotImplementedException();
@@ -268,7 +268,6 @@ namespace Tests.xUpdate
 					throw new NotImplementedException();
 				}
 
-#if !NOASYNC
 				Task<int> IDataProvider.MergeAsync<T>(DataConnection dataConnection, Expression<Func<T, bool>> predicate, bool delete, IEnumerable<T> source, string tableName, string databaseName, string schemaName, CancellationToken token)
 				{
 					throw new NotImplementedException();
@@ -278,7 +277,6 @@ namespace Tests.xUpdate
 				{
 					throw new NotImplementedException();
 				}
-#endif
 
 				void IDataProvider.SetParameter(IDbDataParameter parameter, string name, DataType dataType, object value)
 				{
@@ -390,7 +388,7 @@ namespace Tests.xUpdate
 		}
 
 		[Test, DataContextSource(false, ProviderName.DB2, ProviderName.Firebird, TestProvName.Firebird3,
-			ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative, ProviderName.Sybase,
+			ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative, ProviderName.Sybase, ProviderName.SybaseManaged,
 			ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014,
 			TestProvName.SqlAzure, ProviderName.Informix, ProviderName.SapHana,
 			ProviderName.SqlServer2000, ProviderName.SqlServer2005)]

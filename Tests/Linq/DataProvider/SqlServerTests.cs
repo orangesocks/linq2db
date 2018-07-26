@@ -7,6 +7,7 @@ using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -15,8 +16,9 @@ using LinqToDB.Common;
 using LinqToDB.Data;
 using LinqToDB.DataProvider.SqlServer;
 using LinqToDB.Mapping;
+using LinqToDB.Tools;
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 using Microsoft.SqlServer.Types;
 using SqlServerTypes;
 #endif
@@ -28,20 +30,20 @@ namespace Tests.DataProvider
 	[TestFixture]
 	public class SqlServerTests : DataProviderTestBase
 	{
-#if !NETSTANDARD && !MONO
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0 && !MONO
 		[OneTimeSetUp]
 		protected void InitializeFixture()
 		{
 			// load spatial types support
-			Utilities.LoadNativeAssemblies(AppDomain.CurrentDomain.BaseDirectory);
+			//Utilities.LoadNativeAssemblies(AppDomain.CurrentDomain.BaseDirectory);
 		}
 #endif
 
 		[AttributeUsage(AttributeTargets.Method)]
 		class SqlServerDataContextAttribute : IncludeDataContextSourceAttribute
 		{
-			public SqlServerDataContextAttribute()
-				: base(
+			public SqlServerDataContextAttribute(bool includeLinqService = false)
+				: base(includeLinqService,
 					ProviderName.SqlServer2000, ProviderName.SqlServer2005, ProviderName.SqlServer2008,
 					ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)
 			{
@@ -121,7 +123,7 @@ namespace Tests.DataProvider
 				Assert.That(TestType<DateTime?>      (conn, "datetime2DataType",      DataType.DateTime2,      "AllTypes2"), Is.EqualTo(new DateTime(2012, 12, 12, 12, 12, 12, 12)));
 				Assert.That(TestType<TimeSpan?>      (conn, "timeDataType",           DataType.Time,           "AllTypes2"), Is.EqualTo(new TimeSpan(0, 12, 12, 12, 12)));
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 				Assert.That(TestType<SqlHierarchyId?>(conn, "hierarchyidDataType",              tableName:"AllTypes2"),            Is.EqualTo(SqlHierarchyId.Parse("/1/3/")));
 				Assert.That(TestType<SqlGeography>   (conn, "geographyDataType", skipPass:true, tableName:"AllTypes2").ToString(), Is.EqualTo("LINESTRING (-122.36 47.656, -122.343 47.656)"));
 				Assert.That(TestType<SqlGeometry>    (conn, "geometryDataType",  skipPass:true, tableName:"AllTypes2").ToString(), Is.EqualTo("LINESTRING (100 100, 20 180, 180 180)"));
@@ -597,7 +599,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
 		public void TestHierarchyID(string context)
 		{
@@ -660,26 +662,26 @@ namespace Tests.DataProvider
 			{
 				if (context != ProviderName.SqlServer2000)
 				{
-					Assert.That(conn.Execute<string>     ("SELECT Cast('<xml/>' as xml)"),            Is.EqualTo("<xml />"));
-					Assert.That(conn.Execute<XDocument>  ("SELECT Cast('<xml/>' as xml)").ToString(), Is.EqualTo("<xml />"));
-					Assert.That(conn.Execute<XmlDocument>("SELECT Cast('<xml/>' as xml)").InnerXml,   Is.EqualTo("<xml />"));
+					Assert.That(conn.Execute<string>     ("SELECT Cast('<xml/>' as xml)"),            Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
+					Assert.That(conn.Execute<XDocument>  ("SELECT Cast('<xml/>' as xml)").ToString(), Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
+					Assert.That(conn.Execute<XmlDocument>("SELECT Cast('<xml/>' as xml)").InnerXml,   Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
 				}
 
 				var xdoc = XDocument.Parse("<xml/>");
 				var xml  = Convert<string,XmlDocument>.Lambda("<xml/>");
 
-				Assert.That(conn.Execute<string>     ("SELECT @p", DataParameter.Xml("p", "<xml/>")),        Is.EqualTo("<xml />"));
-				Assert.That(conn.Execute<XDocument>  ("SELECT @p", DataParameter.Xml("p", xdoc)).ToString(), Is.EqualTo("<xml />"));
-				Assert.That(conn.Execute<XmlDocument>("SELECT @p", DataParameter.Xml("p", xml)). InnerXml,   Is.EqualTo("<xml />"));
-				Assert.That(conn.Execute<XDocument>  ("SELECT @p", new DataParameter("p", xdoc)).ToString(), Is.EqualTo("<xml />"));
-				Assert.That(conn.Execute<XDocument>  ("SELECT @p", new DataParameter("p", xml)). ToString(), Is.EqualTo("<xml />"));
+				Assert.That(conn.Execute<string>     ("SELECT @p", DataParameter.Xml("p", "<xml/>")),        Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
+				Assert.That(conn.Execute<XDocument>  ("SELECT @p", DataParameter.Xml("p", xdoc)).ToString(), Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
+				Assert.That(conn.Execute<XmlDocument>("SELECT @p", DataParameter.Xml("p", xml)). InnerXml,   Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
+				Assert.That(conn.Execute<XDocument>  ("SELECT @p", new DataParameter("p", xdoc)).ToString(), Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
+				Assert.That(conn.Execute<XDocument>  ("SELECT @p", new DataParameter("p", xml)). ToString(), Is.EqualTo("<xml/>").Or.EqualTo("<xml />"));
 			}
 		}
 
 		enum TestEnum
 		{
 			[MapValue("A")] AA,
-			[MapValue(ProviderName.SqlServer2008, "C")] 
+			[MapValue(ProviderName.SqlServer2008, "C")]
 			[MapValue("B")] BB,
 		}
 
@@ -960,7 +962,7 @@ namespace Tests.DataProvider
 				if (column.MemberName == "timestampDataType")
 					continue;
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 				if (actualValue is SqlGeometry)
 				{
 					Assert.That(actualValue == null  || ((SqlGeometry) actualValue).IsNull ? null : actualValue.ToString(),
@@ -993,7 +995,7 @@ namespace Tests.DataProvider
 			[Column(DbType="datetimeoffset(7)"), Nullable] public DateTimeOffset? datetimeoffsetDataType { get; set; } // datetimeoffset(7)
 			[Column(DbType="datetime2(7)"),      Nullable] public DateTime?       datetime2DataType      { get; set; } // datetime2(7)
 			[Column(DbType="time(7)"),           Nullable] public TimeSpan?       timeDataType           { get; set; } // time(7)
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 			[Column(DbType="hierarchyid"),       Nullable] public SqlHierarchyId  hierarchyidDataType    { get; set; } // hierarchyid
 			[Column(DbType="geography"),         Nullable] public SqlGeography    geographyDataType      { get; set; } // geography
 			[Column(DbType="geometry"),          Nullable] public SqlGeometry     geometryDataType       { get; set; } // geometry
@@ -1011,7 +1013,7 @@ namespace Tests.DataProvider
 					datetimeoffsetDataType = DateTime.Now.AddMinutes(i),
 					datetime2DataType      = DateTime.Today.AddDays(i),
 					timeDataType           = TimeSpan.FromSeconds(i),
-#if !NETSTANDARD
+#if !NETSTANDARD1_6 && !NETSTANDARD2_0
 					hierarchyidDataType    = SqlHierarchyId.Parse("/1/3/"),
 					geographyDataType      = SqlGeography.Parse("LINESTRING (-122.36 47.656, -122.343 47.656)"),
 					geometryDataType       = SqlGeometry.Parse("LINESTRING (100 100, 20 180, 180 180)"),
@@ -1047,7 +1049,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6
 		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
 		public void BulkCopyAllTypes2MultipleRows(string context)
 		{
@@ -1062,7 +1064,7 @@ namespace Tests.DataProvider
 #endif
 
 		[Test, SqlServerDataContext]
-		public void CreateAlltypes(string context)
+		public void CreateAllTypes(string context)
 		{
 			using (var db = new DataConnection(context))
 			{
@@ -1083,13 +1085,14 @@ namespace Tests.DataProvider
 				}
 
 				var table = db.CreateTable<AllTypes>();
+
 				var list = table.ToList();
 
 				db.DropTable<AllTypes>();
 			}
 		}
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6
 		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014, TestProvName.SqlAzure)]
 		public void CreateAlltypes2(string context)
 		{
@@ -1195,7 +1198,7 @@ namespace Tests.DataProvider
 			catch (Exception)
 			{
 				var vvv=  rd.GetValue(idx);
-				
+
 				throw;
 			}
 		}
@@ -1244,6 +1247,80 @@ namespace Tests.DataProvider
 			{
 				Assert.AreEqual(Person.Count(), db.Person.Set(_ => _.FirstName, _ => _.FirstName).Update());
 				Assert.AreEqual(Person.Count(), db.Person.With("TABLOCK").Set(_ => _.FirstName, _ => _.FirstName).Update());
+			}
+		}
+
+		[Test, SqlServerDataContext(false)]
+		public void InOutProcedureTest(string context)
+		{
+			using (var db = (DataConnection)GetDataContext(context))
+			{
+				var dbName            = TestUtils.GetDatabaseName(db);
+				var    inputID        = 1234;
+				var    inputStr       = "InputStr";
+				int?   outputID       = 5678;
+				int?   inputOutputID  = 9012;
+				string outputStr      = "OuputStr";
+				string inputOutputStr = "InputOutputStr";
+				
+				var parameters = new [] 
+				{
+					new DataParameter("@ID",             inputID,        DataType.Int32),
+					new DataParameter("@outputID",       outputID,       DataType.Int32)   { Direction = ParameterDirection.InputOutput },
+					new DataParameter("@inputOutputID",  inputOutputID,  DataType.Int32)   { Direction = ParameterDirection.InputOutput },
+					new DataParameter("@str",            inputStr,       DataType.VarChar),
+					new DataParameter("@outputStr",      outputStr,      DataType.VarChar) { Direction = ParameterDirection.InputOutput, Size = 50 },
+					new DataParameter("@inputOutputStr", inputOutputStr, DataType.VarChar) { Direction = ParameterDirection.InputOutput, Size = 50 }
+				};
+
+				var ret = db.ExecuteProc($"[{dbName}]..[OutRefTest]", parameters);
+
+				outputID       = Converter.ChangeTypeTo<int?>  (parameters[1].Value);
+				inputOutputID  = Converter.ChangeTypeTo<int?>  (parameters[2].Value);
+				outputStr      = Converter.ChangeTypeTo<string>(parameters[4].Value);
+				inputOutputStr = Converter.ChangeTypeTo<string>(parameters[5].Value);
+
+				Assert.That(outputID,       Is.EqualTo(inputID));
+				Assert.That(inputOutputID,  Is.EqualTo(9012 + inputID));
+				Assert.That(outputStr,      Is.EqualTo(inputStr));
+				Assert.That(inputOutputStr, Is.EqualTo(inputStr + "InputOutputStr"));
+			}
+		}
+
+		[Test, SqlServerDataContext(false)]
+		public async Task InOutProcedureTestAsync(string context)
+		{
+			using (var db = (DataConnection)GetDataContext(context))
+			{
+				var dbName            = TestUtils.GetDatabaseName(db);
+				var    inputID        = 1234;
+				var    inputStr       = "InputStr";
+				int?   outputID       = 5678;
+				int?   inputOutputID  = 9012;
+				string outputStr      = "OuputStr";
+				string inputOutputStr = "InputOutputStr";
+				
+				var parameters = new [] 
+				{
+					new DataParameter("@ID",             inputID,        DataType.Int32),
+					new DataParameter("@outputID",       outputID,       DataType.Int32)   { Direction = ParameterDirection.InputOutput },
+					new DataParameter("@inputOutputID",  inputOutputID,  DataType.Int32)   { Direction = ParameterDirection.InputOutput },
+					new DataParameter("@str",            inputStr,       DataType.VarChar),
+					new DataParameter("@outputStr",      outputStr,      DataType.VarChar) { Direction = ParameterDirection.InputOutput, Size = 50 },
+					new DataParameter("@inputOutputStr", inputOutputStr, DataType.VarChar) { Direction = ParameterDirection.InputOutput, Size = 50 }
+				};
+
+				var ret = await db.ExecuteProcAsync($"[{dbName}]..[OutRefTest]", parameters);
+
+				outputID       = Converter.ChangeTypeTo<int?>  (parameters[1].Value);
+				inputOutputID  = Converter.ChangeTypeTo<int?>  (parameters[2].Value);
+				outputStr      = Converter.ChangeTypeTo<string>(parameters[4].Value);
+				inputOutputStr = Converter.ChangeTypeTo<string>(parameters[5].Value);
+
+				Assert.That(outputID,       Is.EqualTo(inputID));
+				Assert.That(inputOutputID,  Is.EqualTo(9012 + inputID));
+				Assert.That(outputStr,      Is.EqualTo(inputStr));
+				Assert.That(inputOutputStr, Is.EqualTo(inputStr + "InputOutputStr"));
 			}
 		}
 

@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Linq;
+using LinqToDB;
+using LinqToDB.Mapping;
 using NUnit.Framework;
 
 namespace Tests.Linq
@@ -13,34 +15,6 @@ namespace Tests.Linq
 	[TestFixture]
 	public class JoinOptimizeTests : TestBase
 	{
-		SelectQuery GetSelectQuery<T>(IQueryable<T> query)
-		{
-			var eq = (IExpressionQuery)query;
-			var expression = eq.Expression;
-			var info = Query<T>.GetQuery(eq.DataContext, ref expression);
-			return info.Queries.Single().SelectQuery;
-		}
-
-		SelectQuery.SearchCondition GetWhere<T>(IQueryable<T> query)
-		{
-			return GetSelectQuery(query).Where.SearchCondition;
-		}
-
-		SelectQuery.SearchCondition GetWhere(SelectQuery selectQuery)
-		{
-			return selectQuery.Where.SearchCondition;
-		}
-
-		SelectQuery.TableSource GeTableSource(SelectQuery selectQuery)
-		{
-			return selectQuery.From.Tables.Single();
-		}
-
-		SelectQuery.TableSource GeTableSource<T>(IQueryable<T> query)
-		{
-			return GetSelectQuery(query).From.Tables.Single();
-		}
-
 		[Test, NorthwindDataContext]
 		public void InnerJoinToSelf(string context)
 		{
@@ -57,12 +31,12 @@ namespace Tests.Linq
 					join od2 in db.OrderDetail on new {od1.OrderID, od.ProductID} equals new {od2.OrderID, od2.ProductID}
 					join od3 in db.OrderDetail on new {od1.OrderID, od2.ProductID} equals new {od3.OrderID, od3.ProductID}
 					orderby od.OrderID, od.ProductID
-					select new 
+					select new
 					{
 						OrderID = od.OrderID,
 						ProductID = od.ProductID,
-						OrderID1 = od3.OrderID, 
-						OrderID2 = od2.OrderID, 
+						OrderID1 = od3.OrderID,
+						OrderID2 = od2.OrderID,
 					};
 
 				var q2 = from od in dd.OrderDetail
@@ -73,17 +47,17 @@ namespace Tests.Linq
 					join od2 in dd.OrderDetail on new {od1.OrderID, od.ProductID} equals new {od2.OrderID, od2.ProductID}
 					join od3 in dd.OrderDetail on new {od1.OrderID, od2.ProductID} equals new {od3.OrderID, od3.ProductID}
 					orderby od.OrderID, od.ProductID
-					select new 
+					select new
 					{
 						OrderID = od.OrderID,
 						ProductID = od.ProductID,
-						OrderID1 = od3.OrderID, 
-						OrderID2 = od2.OrderID, 
+						OrderID1 = od3.OrderID,
+						OrderID2 = od2.OrderID,
 					};
 
 				Assert.AreEqual(q, q2);
 
-				var ts = GeTableSource(q);
+				var ts = q.GetTableSource();
 				Assert.AreEqual(1, ts.Joins.Count);
 			}
 		}
@@ -101,14 +75,14 @@ namespace Tests.Linq
 					join o3 in db.Order on od.OrderID equals o3.OrderID
 					join od2 in db.OrderDetail on new {od.OrderID, od.ProductID} equals new {od2.OrderID, od2.ProductID}
 					join od3 in db.OrderDetail on new {od2.OrderID, od2.ProductID} equals new {od3.OrderID, od3.ProductID}
-					select new 
+					select new
 					{
 						OrderID = od.OrderID,
 						OrderDate = o3.OrderDate,
 						ProductID = od3.ProductID,
-						OrderID1 = o1.OrderID, 
-						OrderID2 = o2.OrderID, 
-						OrderID3 = o3.OrderID, 
+						OrderID1 = o1.OrderID,
+						OrderID2 = o2.OrderID,
+						OrderID3 = o3.OrderID,
 					};
 
 
@@ -120,31 +94,31 @@ namespace Tests.Linq
 					join o3 in dd.Order on od.OrderID equals o3.OrderID
 					join od2 in dd.OrderDetail on new {od.OrderID, od.ProductID} equals new {od2.OrderID, od2.ProductID}
 					join od3 in dd.OrderDetail on new {od2.OrderID, od2.ProductID} equals new {od3.OrderID, od3.ProductID}
-					select new 
+					select new
 					{
 						OrderID = od.OrderID,
 						OrderDate = o3.OrderDate,
 						ProductID = od3.ProductID,
-						OrderID1 = o1.OrderID, 
-						OrderID2 = o2.OrderID, 
-						OrderID3 = o3.OrderID, 
+						OrderID1 = o1.OrderID,
+						OrderID2 = o2.OrderID,
+						OrderID3 = o3.OrderID,
 					};
 
 				Assert.AreEqual(q, q2);
 
-				Assert.AreEqual(1, GeTableSource(q).Joins.Count);
+				Assert.AreEqual(1, q.GetTableSource().Joins.Count);
 
 				var proj1 = q.Select(v => v.OrderID);
 				Console.WriteLine(proj1.ToString());
-				var sq1 = GetSelectQuery(proj1);
-				Assert.AreEqual(1, GeTableSource(sq1).Joins.Count);
-				Assert.AreEqual(0, GetWhere(sq1).Conditions.Count);
+				var sq1 = proj1.GetSelectQuery();
+				Assert.AreEqual(1, sq1.GetTableSource().Joins.Count);
+				Assert.AreEqual(0, sq1.GetWhere().Conditions.Count);
 
 				var proj2 = q.Select(v => v.OrderDate);
 				Console.WriteLine(proj2.ToString());
-				var sq2 = GetSelectQuery(proj2);
-				Assert.AreEqual(1, GeTableSource(sq2).Joins.Count);
-				Assert.AreEqual(0, GetWhere(sq2).Conditions.Count);
+				var sq2 = proj2.GetSelectQuery();
+				Assert.AreEqual(1, sq2.GetTableSource().Joins.Count);
+				Assert.AreEqual(0, sq2.GetWhere().Conditions.Count);
 			}
 		}
 
@@ -161,13 +135,13 @@ namespace Tests.Linq
 					join o1 in db.Order on od.OrderID equals o1.OrderID
 					join od1 in db.OrderDetail on new { o1.OrderID, od.ProductID } equals new { od1.OrderID, od1.ProductID }
 					join od2 in db.OrderDetail on new { od.OrderID, od.ProductID } equals new { od2.OrderID, od2.ProductID }
-					orderby o1.OrderID, od.ProductID 
-					select new 
+					orderby o1.OrderID, od.ProductID
+					select new
 					{
 						OrderID = od.OrderID,
 						ProductID = od.ProductID,
-						OrderID1 = o1.OrderID, 
-						OrderID2 = od2.OrderID, 
+						OrderID1 = o1.OrderID,
+						OrderID2 = od2.OrderID,
 					};
 
 				var str = q.ToString();
@@ -176,18 +150,18 @@ namespace Tests.Linq
 					join o1 in dd.Order on od.OrderID equals o1.OrderID
 					join od1 in dd.OrderDetail on new { o1.OrderID, od.ProductID } equals new { od1.OrderID, od1.ProductID }
 					join od2 in dd.OrderDetail on new { o1.OrderID, od.ProductID } equals new { od2.OrderID, od2.ProductID }
-					orderby o1.OrderID, od.ProductID 
-					select new 
+					orderby o1.OrderID, od.ProductID
+					select new
 					{
 						OrderID = od.OrderID,
 						ProductID = od.ProductID,
-						OrderID1 = o1.OrderID, 
-						OrderID2 = od2.OrderID, 
+						OrderID1 = o1.OrderID,
+						OrderID2 = od2.OrderID,
 					};
 
 				Assert.AreEqual(q, q2);
 
-				var ts = GeTableSource(q);
+				var ts = q.GetTableSource();
 				Assert.AreEqual(1, ts.Joins.Count);
 			}
 		}
@@ -202,7 +176,7 @@ namespace Tests.Linq
 
 				var q = from od in db.OrderDetail
 					join o1 in db.Order on new {od.OrderID, od.ProductID} equals new {o1.OrderID, ProductID = 39}
-					join e1 in db.Employee on o1.EmployeeID equals e1.EmployeeID 
+					join e1 in db.Employee on o1.EmployeeID equals e1.EmployeeID
 					from o2 in db.Order.Where(o => o.OrderID == od.OrderID).DefaultIfEmpty()
 					from o3 in db.Order.Where(o => o.OrderID == od.OrderID && od.ProductID == 1).DefaultIfEmpty()
 					from o4 in db.Order.Where(o => o.OrderID == od.OrderID).DefaultIfEmpty()
@@ -210,7 +184,7 @@ namespace Tests.Linq
 					from o6 in db.Order.Where(o => o.OrderID == od.OrderID && od.ProductID == 1).DefaultIfEmpty()
 					from o7 in db.Order.Where(o => o.OrderID == od.OrderID).DefaultIfEmpty()
 					join o8 in db.Order on od.OrderID equals o8.OrderID
-					join e2 in db.Employee on o8.EmployeeID equals e2.EmployeeID 
+					join e2 in db.Employee on o8.EmployeeID equals e2.EmployeeID
 					from o9 in db.OrderDetail.Where(d => d.OrderID == od.OrderID && d.ProductID == od.ProductID).DefaultIfEmpty()
 					from o10 in db.OrderDetail.Where(d => d.OrderID == od.OrderID && d.ProductID == od.ProductID).DefaultIfEmpty()
 					where o5 != null && o5.OrderID > 1000
@@ -250,12 +224,11 @@ namespace Tests.Linq
 
 				Assert.AreEqual(q, q2);
 
-				var ts = GeTableSource(q);
-				Assert.AreEqual(2, ts.Joins.Count(j => j.JoinType == SelectQuery.JoinType.Inner));
-				Assert.AreEqual(3, ts.Joins.Count(j => j.JoinType == SelectQuery.JoinType.Left));
+				var ts = q.GetTableSource();
+				Assert.AreEqual(2, ts.Joins.Count(j => j.JoinType == JoinType.Inner));
+				Assert.AreEqual(3, ts.Joins.Count(j => j.JoinType == JoinType.Left));
 			}
 		}
-
 
 		[Test, NorthwindDataContext]
 		public void InnerJoin1(string context)
@@ -274,10 +247,10 @@ namespace Tests.Linq
 						OrderID2 = o2.OrderID,
 					};
 
-				Assert.AreEqual(1, GeTableSource(q).Joins.Count);
+				Assert.AreEqual(1, q.GetTableSource().Joins.Count);
 
 				var proj1 = q.Select(v => v.OrderID);
-				Assert.AreEqual(1, GeTableSource(proj1).Joins.Count);
+				Assert.AreEqual(1, proj1.GetTableSource().Joins.Count);
 			}
 		}
 
@@ -302,7 +275,7 @@ namespace Tests.Linq
 					join o1 in db.Order on e.OrderID equals o1.OrderID
 					select e;
 
-				var ts = GeTableSource(q2);
+				var ts = q2.GetTableSource();
 				Assert.AreEqual(1, ((SelectQuery)ts.Source).From.Tables.Single().Joins.Count);
 			}
 		}
@@ -328,10 +301,10 @@ namespace Tests.Linq
 
 				var str = q.ToString();
 
-				Assert.AreEqual(1, GeTableSource(q).Joins.Count);
+				Assert.AreEqual(1, q.GetTableSource().Joins.Count);
 
 				var proj1 = q.Select(v => v.OrderID);
-				Assert.AreEqual(1, GeTableSource(proj1).Joins.Count);
+				Assert.AreEqual(1, proj1.GetTableSource().Joins.Count);
 			}
 		}
 
@@ -357,11 +330,11 @@ namespace Tests.Linq
 					};
 
 				Console.WriteLine(q.ToString());
-				Assert.AreEqual(1, GeTableSource(q).Joins.Count);
+				Assert.AreEqual(1, q.GetTableSource().Joins.Count);
 
 				var proj1 = q.Select(v => v.OrderID);
 				Console.WriteLine(proj1.ToString());
-				Assert.AreEqual(1, GeTableSource(proj1).Joins.Count);
+				Assert.AreEqual(1, proj1.GetTableSource().Joins.Count);
 			}
 		}
 
@@ -382,15 +355,15 @@ namespace Tests.Linq
 						OrderID2 = o2.OrderID,
 					};
 
-				var sql = GetSelectQuery(q);
-				Assert.AreEqual(1, GeTableSource(sql).Joins.Count);
-				Assert.AreEqual(2, GeTableSource(sql).Joins.First().Condition.Conditions.Count);
-				Assert.AreEqual(0, GetWhere(sql).Conditions.Count);
+				var sql = q.GetSelectQuery();
+				Assert.AreEqual(1, sql.GetTableSource().Joins.Count);
+				Assert.AreEqual(2, sql.GetTableSource().Joins.First().Condition.Conditions.Count);
+				Assert.AreEqual(0, sql.GetWhere().Conditions.Count);
 
 				var proj1 = q.Select(v => v.OrderID);
-				var sql1 = GetSelectQuery(proj1);
-				Assert.AreEqual(1, GeTableSource(sql1).Joins.Count);
-				Assert.AreEqual(0, GetWhere(sql1).Conditions.Count);
+				var sql1 = proj1.GetSelectQuery();
+				Assert.AreEqual(1, sql1.GetTableSource().Joins.Count);
+				Assert.AreEqual(0, sql1.GetWhere().Conditions.Count);
 			}
 		}
 
@@ -415,7 +388,7 @@ namespace Tests.Linq
 						OrderID3 = o3.OrderID,
 					};
 
-				Assert.AreEqual(1, GeTableSource(q).Joins.Count);
+				Assert.AreEqual(1, q.GetTableSource().Joins.Count);
 			}
 		}
 
@@ -436,8 +409,8 @@ namespace Tests.Linq
 						OrderID2 = o2.OrderID,
 					};
 
-				var ts = GeTableSource(q);
-				Assert.AreEqual(1, ts.Joins.Count(j => j.JoinType == SelectQuery.JoinType.Left));
+				var ts = q.GetTableSource();
+				Assert.AreEqual(1, ts.Joins.Count(j => j.JoinType == JoinType.Left));
 			}
 		}
 
@@ -458,8 +431,8 @@ namespace Tests.Linq
 						OrderID2 = o2.OrderID,
 					};
 
-				var ts = GeTableSource(q);
-				Assert.AreEqual(2, ts.Joins.Count(j => j.JoinType == SelectQuery.JoinType.Left));
+				var ts = q.GetTableSource();
+				Assert.AreEqual(2, ts.Joins.Count(j => j.JoinType == JoinType.Left));
 			}
 		}
 
@@ -480,19 +453,19 @@ namespace Tests.Linq
 						OrderID2 = o2.OrderID,
 					};
 
-				Assert.AreEqual(1, GeTableSource(q).Joins.Count, "Join not optimized");
+				Assert.AreEqual(1, q.GetTableSource().Joins.Count, "Join not optimized");
 
 				var qw = q.Where(v => v.OrderDate != null);
-				Assert.AreEqual(2, GeTableSource(qw).Joins.Count, "If LEFT join is used in where condition - it can not be optimized");
+				Assert.AreEqual(2, qw.GetTableSource().Joins.Count, "If LEFT join is used in where condition - it can not be optimized");
 
 				var proj1 = q.Select(v => v.OrderID1);
-				Assert.AreEqual(1, GeTableSource(proj1).Joins.Count);
+				Assert.AreEqual(1, proj1.GetTableSource().Joins.Count);
 
 				var proj2 = qw.Select(v => v.OrderID1);
-				Assert.AreEqual(1, GeTableSource(proj2).Joins.Count);
+				Assert.AreEqual(1, proj2.GetTableSource().Joins.Count);
 
 				var proj3 = q.Select(v => v.OrderID);
-				Assert.AreEqual(0, GeTableSource(proj3).Joins.Count, "All joins should be optimized");
+				Assert.AreEqual(0, proj3.GetTableSource().Joins.Count, "All joins should be optimized");
 			}
 		}
 
@@ -525,25 +498,25 @@ namespace Tests.Linq
 						OrderID2 = o2.OrderID,
 					};
 
-				Assert.AreEqual(1, GeTableSource(q).Joins.Count, "Join not optimized");
+				Assert.AreEqual(1, q.GetTableSource().Joins.Count, "Join not optimized");
 
-				var ts = GeTableSource(q);
+				var ts = q.GetTableSource();
 				Assert.AreEqual(1, ((SelectQuery)ts.Source).From.Tables.Single().Joins.Count, "Join should be optimized");
 
 #pragma warning disable CS0472 // The result of the expression is always the same since a value of this type is never equal to 'null'
 				var qw = q.Where(v => v.OrderID1 != null);
 #pragma warning restore CS0472 // The result of the expression is always the same since a value of this type is never equal to 'null'
 				var str = qw.ToString();
-				Assert.AreEqual(2, GeTableSource(qw).Joins.Count, "If LEFT join is used in where condition - it can not be optimized");
+				Assert.AreEqual(2, qw.GetTableSource().Joins.Count, "If LEFT join is used in where condition - it can not be optimized");
 
 				var proj1 = q.Select(v => v.OrderID1);
-				Assert.AreEqual(1, GeTableSource(proj1).Joins.Count);
+				Assert.AreEqual(1, proj1.GetTableSource().Joins.Count);
 
 				var proj2 = qw.Select(v => v.OrderID1);
-				Assert.AreEqual(1, GeTableSource(proj2).Joins.Count);
+				Assert.AreEqual(1, proj2.GetTableSource().Joins.Count);
 
 				var proj3 = q.Select(v => v.OrderID);
-				Assert.AreEqual(0, GeTableSource(proj3).Joins.Count, "All joins should be optimized");
+				Assert.AreEqual(0, proj3.GetTableSource().Joins.Count, "All joins should be optimized");
 			}
 		}
 
@@ -556,19 +529,19 @@ namespace Tests.Linq
 					join od2 in db.Order on od.EmployeeID equals od2.OrderID
 					select od;
 
-				Assert.AreEqual(1, GeTableSource(q1).Joins.Count);
+				Assert.AreEqual(1, q1.GetTableSource().Joins.Count);
 
 				var q2 = from od in db.Order
 					join od2 in db.Order on od.OrderID equals od2.EmployeeID
 					select od;
 
-				Assert.AreEqual(1, GeTableSource(q2).Joins.Count);
+				Assert.AreEqual(1, q2.GetTableSource().Joins.Count);
 
 				var q3 = from od in db.Order
 					join od2 in db.Order on new {ID1 = od.OrderID, ID2 = od.EmployeeID.Value} equals new {ID1 = od2.EmployeeID.Value, ID2 = od2.OrderID}
 					select od;
 
-				Assert.AreEqual(1, GeTableSource(q3).Joins.Count);
+				Assert.AreEqual(1, q3.GetTableSource().Joins.Count);
 
 			}
 		}
@@ -582,14 +555,82 @@ namespace Tests.Linq
 					join od2 in db.Order on od.OrderID equals od2.OrderID
 					select od;
 
-				Assert.AreEqual(0, GeTableSource(q1).Joins.Count);
+				Assert.AreEqual(0, q1.GetTableSource().Joins.Count);
 
 				var q2 = from od in db.Order
 					join od2 in db.Order on new {od.OrderID, od.EmployeeID} equals new {od2.OrderID, od2.EmployeeID}
 					select od;
 
-				Assert.AreEqual(0, GeTableSource(q2).Joins.Count);
+				Assert.AreEqual(0, q2.GetTableSource().Joins.Count);
 			}
 		}
+
+
+		[Table(Name = "Person")]
+		public class PersonEntity
+		{
+			[Column]
+			[PrimaryKey]
+			[Identity]
+			public int Id { get; set; }
+
+			[Column]
+			public string Name { get; set; }
+		}
+
+
+		[Table(Name = "Adress")]
+		public class AdressEntity
+		{
+			[Column]
+			[PrimaryKey]
+			public int Id { get; set; }
+
+			[Column]
+			public int PersonId { get; set; }
+		}
+
+		[Test, NorthwindDataContext]
+		public void JoinWithHint(string context)
+		{
+			using (var db = new NorthwindDB(context))
+			{
+				var query = from p in db.GetTable<PersonEntity>().With("READUNCOMMITTED")
+						 join a in db.GetTable<AdressEntity>().With("READUNCOMMITTED")
+						 on p.Id equals a.Id //PK column
+						 select p;
+
+				Assert.AreEqual(1, query.GetTableSource().Joins.Count);
+			}
+		}
+
+		[Test, NorthwindDataContext]
+		public void SelfJoinWithHint(string context)
+		{
+			using (var db = new NorthwindDB(context))
+			{
+				var query = from p in db.GetTable<AdressEntity>().With("READUNCOMMITTED")
+						 join a in db.GetTable<AdressEntity>().With("READUNCOMMITTED")
+						 on p.Id equals a.Id //PK column
+						 select p;
+
+				Assert.AreEqual(0, query.GetTableSource().Joins.Count);
+			}
+		}
+
+		[Test, NorthwindDataContext]
+		public void SelfJoinWithDifferentHint(string context)
+		{
+			using (var db = new NorthwindDB(context))
+			{
+				var query = from p in db.GetTable<AdressEntity>().With("NOLOCK")
+						 join a in db.GetTable<AdressEntity>().With("READUNCOMMITTED")
+						 on p.Id equals a.Id //PK column
+						 select p;
+
+				Assert.AreEqual(1, query.GetTableSource().Joins.Count);
+			}
+		}
+
 	}
 }

@@ -195,7 +195,7 @@ namespace Tests.Linq
 		}
 
 		[Test, DataContextSource(
-			ProviderName.DB2, ProviderName.Informix, ProviderName.Firebird, TestProvName.Firebird3, ProviderName.PostgreSQL, ProviderName.SQLite, TestProvName.SQLiteMs, ProviderName.Access, ProviderName.SapHana)]
+			ProviderName.DB2, ProviderName.Informix, ProviderName.Firebird, TestProvName.Firebird3, ProviderName.PostgreSQL, ProviderName.SQLiteClassic, ProviderName.SQLiteMS, ProviderName.Access, ProviderName.SapHana)]
 		public void NewGuid(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -247,7 +247,7 @@ namespace Tests.Linq
 		}
 
 		[Test, DataContextSource(
-			ProviderName.DB2, ProviderName.Informix, ProviderName.Firebird, ProviderName.PostgreSQL, ProviderName.SQLite, TestProvName.SQLiteMs, ProviderName.Access)]
+			ProviderName.DB2, ProviderName.Informix, ProviderName.Firebird, ProviderName.PostgreSQL, ProviderName.SQLiteClassic, ProviderName.SQLiteMS, ProviderName.Access)]
 		public void InsertBinary1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -317,7 +317,7 @@ namespace Tests.Linq
 											from t in db.Types2 where t.DateTimeValue.Value.Date > dt.Value.Date select t);
 		}
 
-		[Test, DataContextSource(ProviderName.SQLite, TestProvName.SQLiteMs)]
+		[Test, DataContextSource(ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
 		public void DateTime21(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -338,7 +338,7 @@ namespace Tests.Linq
 		[Test, DataContextSource(
 				ProviderName.SqlCe, ProviderName.Access, ProviderName.SqlServer2005, ProviderName.DB2, ProviderName.Informix,
 				ProviderName.Firebird, ProviderName.OracleNative, ProviderName.OracleManaged, ProviderName.PostgreSQL, ProviderName.MySql,
-				ProviderName.Sybase, ProviderName.SqlServer2000, ProviderName.SapHana, TestProvName.MariaDB, TestProvName.MySql57, TestProvName.Firebird3)]
+				ProviderName.Sybase, ProviderName.SybaseManaged, ProviderName.SqlServer2000, ProviderName.SapHana, TestProvName.MariaDB, TestProvName.MySql57, TestProvName.Firebird3)]
 		public void DateTime22(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -359,7 +359,7 @@ namespace Tests.Linq
 		[Test, DataContextSource(
 				ProviderName.SqlCe, ProviderName.Access, ProviderName.SqlServer2005, ProviderName.DB2, ProviderName.Informix,
 				ProviderName.Firebird, ProviderName.OracleNative, ProviderName.OracleManaged, ProviderName.PostgreSQL, ProviderName.MySql,
-				ProviderName.Sybase, ProviderName.SqlServer2000, ProviderName.SapHana, TestProvName.MariaDB, TestProvName.MySql57, TestProvName.Firebird3)]
+				ProviderName.Sybase, ProviderName.SybaseManaged, ProviderName.SqlServer2000, ProviderName.SapHana, TestProvName.MariaDB, TestProvName.MySql57, TestProvName.Firebird3)]
 		public void DateTime23(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -383,7 +383,7 @@ namespace Tests.Linq
 		[Test, DataContextSource(
 				ProviderName.SqlCe, ProviderName.Access, ProviderName.SqlServer2005, ProviderName.DB2, ProviderName.Informix,
 				ProviderName.Firebird, ProviderName.OracleNative, ProviderName.OracleManaged, ProviderName.PostgreSQL, ProviderName.MySql, TestProvName.MariaDB,
-				TestProvName.MariaDB, TestProvName.MySql57, TestProvName.MySql57, ProviderName.Sybase, ProviderName.SqlServer2000, ProviderName.SapHana, TestProvName.Firebird3)]
+				TestProvName.MariaDB, TestProvName.MySql57, TestProvName.MySql57, ProviderName.Sybase, ProviderName.SybaseManaged, ProviderName.SqlServer2000, ProviderName.SapHana, TestProvName.Firebird3)]
 		public void DateTime24(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -477,7 +477,7 @@ namespace Tests.Linq
 					from p in db.Parent select new { Value = p.Value1.GetValueOrDefault() });
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.Firebird, TestProvName.Firebird3, ProviderName.Sybase), Category("WindowsOnly")]
+		[Test, DataContextSource(ProviderName.Informix, ProviderName.Firebird, TestProvName.Firebird3, ProviderName.Sybase, ProviderName.SybaseManaged), Category("WindowsOnly")]
 		public void Unicode(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -505,7 +505,7 @@ namespace Tests.Linq
 			}
 		}
 
-#if !NETSTANDARD
+#if !NETSTANDARD1_6
 		[Test, DataContextSource(
 			ProviderName.Informix
 			)]
@@ -529,8 +529,8 @@ namespace Tests.Linq
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from t1 in Types
-					join t2 in Types on t1.SmallIntValue equals t2.ID
+					from t1 in GetTypes(context)
+					join t2 in GetTypes(context) on t1.SmallIntValue equals t2.ID
 					select t1
 					,
 					from t1 in db.Types
@@ -658,15 +658,15 @@ namespace Tests.Linq
 
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from t in    Types where param == null || t.BoolValue == param select t,
-					from t in db.Types where param == null || t.BoolValue == param select t);
+					from t in GetTypes(context) where param == null || t.BoolValue == param select t,
+					from t in db.Types          where param == null || t.BoolValue == param select t);
 
 			param = true;
 
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from t in    Types where param == null || t.BoolValue == param select t,
-					from t in db.Types where param == null || t.BoolValue == param select t);
+					from t in GetTypes(context) where param == null || t.BoolValue == param select t,
+					from t in db.Types          where param == null || t.BoolValue == param select t);
 		}
 
 		[Test, DataContextSource]
@@ -677,8 +677,8 @@ namespace Tests.Linq
 
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from t1 in    Types
-					join t2 in    Types on t1.ID equals t2.ID
+					from t1 in GetTypes(context)
+					join t2 in GetTypes(context) on t1.ID equals t2.ID
 					where (param1 == null || t1.SmallIntValue == param1) && (param2 == null || t1.BoolValue == param2)
 					select t1
 					,
@@ -692,8 +692,8 @@ namespace Tests.Linq
 
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from t1 in    Types
-					join t2 in    Types on t1.ID equals t2.ID
+					from t1 in GetTypes(context)
+					join t2 in GetTypes(context) on t1.ID equals t2.ID
 					where (param1 == null || t1.SmallIntValue == param1) && (param2 == null || t1.BoolValue == param2)
 					select t1
 					,
@@ -711,8 +711,8 @@ namespace Tests.Linq
 
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from t in    Types where (param1 == null || t.SmallIntValue == param1) && (param2 == null || t.BoolValue == param2) select t,
-					from t in db.Types where (param1 == null || t.SmallIntValue == param1) && (param2 == null || t.BoolValue == param2) select t);
+					from t in GetTypes(context) where (param1 == null || t.SmallIntValue == param1) && (param2 == null || t.BoolValue == param2) select t,
+					from t in db.Types          where (param1 == null || t.SmallIntValue == param1) && (param2 == null || t.BoolValue == param2) select t);
 		}
 	}
 }
