@@ -6,17 +6,18 @@ using System.Linq;
 using System.Reflection;
 
 using JetBrains.Annotations;
-using LinqToDB.Common;
 
 namespace LinqToDB.DataProvider.SqlServer
 {
+	using Common;
 	using Configuration;
-
 	using Data;
 
 	public static class SqlServerTools
 	{
 		#region Init
+
+		private static readonly Func<string, string> _quoteIdentifier;
 
 		static readonly SqlServerDataProvider _sqlServerDataProvider2000 = new SqlServerDataProvider(ProviderName.SqlServer2000, SqlServerVersion.v2000);
 		static readonly SqlServerDataProvider _sqlServerDataProvider2005 = new SqlServerDataProvider(ProviderName.SqlServer2005, SqlServerVersion.v2005);
@@ -37,6 +38,33 @@ namespace LinqToDB.DataProvider.SqlServer
 			DataConnection.AddDataProvider(_sqlServerDataProvider2000);
 
 			DataConnection.AddProviderDetector(ProviderDetector);
+
+#if !NETSTANDARD1_6
+			try
+			{
+				_quoteIdentifier = TryToUseCommandBuilder();
+			}
+			catch
+			{
+				// see https://github.com/linq2db/linq2db/issues/1487
+			}
+#endif
+			if (_quoteIdentifier == null)
+				_quoteIdentifier = identifier => '[' + identifier.Replace("]", "]]") + ']';
+
+		}
+
+#if !NETSTANDARD1_6
+		private static Func<string, string> TryToUseCommandBuilder()
+		{
+			var commandBuilder = new SqlCommandBuilder();
+			return commandBuilder.QuoteIdentifier;
+		}
+#endif
+
+		internal static string QuoteIdentifier(string identifier)
+		{
+			return _quoteIdentifier(identifier);
 		}
 
 		static IDataProvider ProviderDetector(IConnectionStringSettings css, string connectionString)
@@ -91,7 +119,7 @@ namespace LinqToDB.DataProvider.SqlServer
 
 								if (int.TryParse(conn.ServerVersion.Split('.')[0], out var version))
 								{
-									if (version == 8)
+									if (version <= 8)
 										return _sqlServerDataProvider2000;
 
 									using (var cmd = conn.CreateCommand())
@@ -99,13 +127,26 @@ namespace LinqToDB.DataProvider.SqlServer
 										cmd.CommandText = "SELECT compatibility_level FROM sys.databases WHERE name = db_name()";
 										var level = Converter.ChangeTypeTo<int>(cmd.ExecuteScalar());
 
-										switch (level)
+										if (level >= 110)
+											return _sqlServerDataProvider2012;
+										if (level >= 100)
+											return _sqlServerDataProvider2008;
+										if (level >= 90)
+											return _sqlServerDataProvider2005;
+										if (level >= 80)
+											return _sqlServerDataProvider2000;
+
+										switch (version)
 										{
-											case  80 : return _sqlServerDataProvider2000;
-											case  90 : return _sqlServerDataProvider2005;
-											case 100 : return _sqlServerDataProvider2008;
-											case 110 : return _sqlServerDataProvider2012;
-											default  : return _sqlServerDataProvider2012;
+											case  8 : return _sqlServerDataProvider2000;
+											case  9 : return _sqlServerDataProvider2005;
+											case 10 : return _sqlServerDataProvider2008;
+											case 11 : return _sqlServerDataProvider2012;
+											case 12 : return _sqlServerDataProvider2012;
+											default :
+												if (version > 12)
+													return _sqlServerDataProvider2012;
+												return _sqlServerDataProvider2008;
 										}
 									}
 								}
@@ -122,7 +163,7 @@ namespace LinqToDB.DataProvider.SqlServer
 			return null;
 		}
 
-		#endregion
+#endregion
 
 		#region Public Members
 
@@ -156,7 +197,7 @@ namespace LinqToDB.DataProvider.SqlServer
 
 		public static void ResolveSqlTypes([NotNull] string path)
 		{
-			if (path == null) throw new ArgumentNullException("path");
+			if (path == null) throw new ArgumentNullException(nameof(path));
 			new AssemblyResolver(path, "Microsoft.SqlServer.Types");
 		}
 
@@ -224,22 +265,7 @@ namespace LinqToDB.DataProvider.SqlServer
 
 		#region BulkCopy
 
-		private static BulkCopyType _defaultBulkCopyType = BulkCopyType.ProviderSpecific;
-		public  static BulkCopyType  DefaultBulkCopyType
-		{
-			get { return _defaultBulkCopyType;  }
-			set { _defaultBulkCopyType = value; }
-		}
-
-//		public static int MultipleRowsCopy<T>(DataConnection dataConnection, IEnumerable<T> source, int maxBatchSize = 1000)
-//		{
-//			return dataConnection.BulkCopy(
-//				new BulkCopyOptions
-//				{
-//					BulkCopyType = BulkCopyType.MultipleRows,
-//					MaxBatchSize = maxBatchSize,
-//				}, source);
-//		}
+		public  static BulkCopyType  DefaultBulkCopyType { get; set; } = BulkCopyType.ProviderSpecific;
 
 		public static BulkCopyRowsCopied ProviderSpecificBulkCopy<T>(
 			DataConnection             dataConnection,
@@ -250,6 +276,7 @@ namespace LinqToDB.DataProvider.SqlServer
 			bool                       checkConstraints   = false,
 			int                        notifyAfter        = 0,
 			Action<BulkCopyRowsCopied> rowsCopiedCallback = null)
+			where T : class
 		{
 			return dataConnection.BulkCopy(
 				new BulkCopyOptions

@@ -10,7 +10,7 @@ namespace LinqToDB.ServiceModel
 	using Common;
 	using Data;
 	using Linq;
-	using LinqToDB.Extensions;
+	using Extensions;
 	using SqlQuery;
 
 	[ServiceBehavior  (InstanceContextMode = InstanceContextMode.Single, ConcurrencyMode = ConcurrencyMode.Multiple)]
@@ -78,6 +78,7 @@ namespace LinqToDB.ServiceModel
 				ValidateQuery(query);
 
 				using (var db = CreateDataContext(configuration))
+				using (db.DataProvider.ExecuteScope())
 				{
 					return DataConnection.QueryRunner.ExecuteNonQuery(db, new QueryContext
 					{
@@ -104,12 +105,13 @@ namespace LinqToDB.ServiceModel
 				ValidateQuery(query);
 
 				using (var db = CreateDataContext(configuration))
+				using (db.DataProvider.ExecuteScope())
 				{
 					return DataConnection.QueryRunner.ExecuteScalar(db, new QueryContext
 					{
-						Statement = query.Statement,
-						Parameters  = query.Parameters,
-						QueryHints  = query.QueryHints
+						Statement  = query.Statement,
+						Parameters = query.Parameters,
+						QueryHints = query.QueryHints
 					});
 				}
 			}
@@ -130,6 +132,7 @@ namespace LinqToDB.ServiceModel
 				ValidateQuery(query);
 
 				using (var db = CreateDataContext(configuration))
+				using (db.DataProvider.ExecuteScope())
 				{
 					using (var rd = DataConnection.QueryRunner.ExecuteReader(db, new QueryContext
 					{
@@ -204,7 +207,7 @@ namespace LinqToDB.ServiceModel
 										case TypeCode.Decimal  : data[i] = rd.GetDecimal (i).ToString(CultureInfo.InvariantCulture); break;
 										case TypeCode.Double   : data[i] = rd.GetDouble  (i).ToString(CultureInfo.InvariantCulture); break;
 										case TypeCode.Single   : data[i] = rd.GetFloat   (i).ToString(CultureInfo.InvariantCulture); break;
-										case TypeCode.DateTime : data[i] = rd.GetDateTime(i).ToString("o");                          break;
+										case TypeCode.DateTime : data[i] = rd.GetDateTime(i).ToBinary().ToString(CultureInfo.InvariantCulture); break;
 										default                :
 											{
 												if (type == typeof(DateTimeOffset))
@@ -212,9 +215,9 @@ namespace LinqToDB.ServiceModel
 													var dt = rd.GetValue(i);
 
 													if (dt is DateTime)
-														data[i] = ((DateTime)dt).ToString("o");
+														data[i] = ((DateTime)dt).ToBinary().ToString(CultureInfo.InvariantCulture);
 													else if (dt is DateTimeOffset)
-														data[i] = ((DateTimeOffset)dt).ToString("o");
+														data[i] = ((DateTimeOffset)dt).UtcTicks.ToString(CultureInfo.InvariantCulture);
 													else
 														data[i] = rd.GetValue(i).ToString();
 												}
@@ -260,6 +263,7 @@ namespace LinqToDB.ServiceModel
 					ValidateQuery(query);
 
 				using (var db = CreateDataContext(configuration))
+				using (db.DataProvider.ExecuteScope())
 				{
 					db.BeginTransaction();
 

@@ -1,14 +1,18 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 
 using LinqToDB;
 using LinqToDB.Expressions;
-
+using LinqToDB.Mapping;
+using LinqToDB.Tools;
 using NUnit.Framework;
 
 namespace Tests.Linq
 {
 	using Model;
+	using Tools;
 
 	public class CteTests : TestBase
 	{
@@ -16,7 +20,7 @@ namespace Tests.Linq
 		{
 			ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014,
 			ProviderName.Firebird,
-			ProviderName.PostgreSQL,
+			ProviderName.PostgreSQL, ProviderName.PostgreSQL92, ProviderName.PostgreSQL93, ProviderName.PostgreSQL95, TestProvName.PostgreSQL10, TestProvName.PostgreSQL11, TestProvName.PostgreSQLLatest,
 			ProviderName.DB2,
 			ProviderName.SQLite, ProviderName.SQLiteClassic, ProviderName.SQLiteMS,
 			ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative
@@ -24,7 +28,7 @@ namespace Tests.Linq
 			// Will be supported in SQL 8.0 - ProviderName.MySql
 		};
 
-		class CteContextSourceAttribute : IncludeDataSourcesAttribute
+		public class CteContextSourceAttribute : IncludeDataSourcesAttribute
 		{
 			public CteContextSourceAttribute() : this(true)
 			{
@@ -46,7 +50,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Combinatorial]
+		[Test]
 		public void Test1([CteContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -69,7 +73,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Combinatorial]
+		[Test]
 		public void Test2([CteContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -97,12 +101,12 @@ namespace Tests.Linq
 				var expectedStr = expected.ToString();
 				var resultdStr  = result.ToString();
 
-				// Looks like we do not populate needed field for CTE. It is aproblem thta needs to be solved
+				// Looks like we do not populate needed field for CTE. It is aproblem that needs to be solved
 				AreEqual(expected, result);
 			}
 		}
 
-		[Test, Combinatorial]
+		[Test]
 		public void TestAsTable([CteContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -126,8 +130,8 @@ namespace Tests.Linq
 			return source.Provider.CreateQuery<TSource>(newExpr);
 		}
 
-		[Test, NorthwindDataContext]
-		public void ProductAndCategoryNamesOverTenDollars(string context)
+		[Test]
+		public void ProductAndCategoryNamesOverTenDollars([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -158,8 +162,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void ProductAndCategoryNamesOverTenDollars2(string context)
+		[Test]
+		public void ProductAndCategoryNamesOverTenDollars2([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -200,8 +204,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void ProductsOverTenDollars(string context)
+		[Test]
+		public void ProductsOverTenDollars([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -251,8 +255,8 @@ namespace Tests.Linq
 		}
 
 
-		[Test, NorthwindDataContext]
-		public void EmployeeSubordinatesReport(string context)
+		[Test]
+		public void EmployeeSubordinatesReport([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -311,16 +315,19 @@ namespace Tests.Linq
 			public int HierarchyLevel;
 		}
 
-		[Test, NorthwindDataContext(true)]
-		public void EmployeeHierarchy(string context)
+		[Test]
+		public void EmployeeHierarchy([NorthwindDataContext(true)] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
+				// just create another CTE
+				var employeeCte = db.Employee.Where(e => e.EmployeeID > 0).AsCte();
+
 				var employeeHierarchyCte = db.GetCte<EmployeeHierarchyCTE>(employeeHierarchy =>
 				{
 					return
 						(
-							from e in db.Employee
+							from e in employeeCte
 							where e.ReportsTo == null
 							select new EmployeeHierarchyCTE
 							{
@@ -333,7 +340,7 @@ namespace Tests.Linq
 						)
 						.Concat
 						(
-							from e in db.Employee
+							from e in employeeCte
 							from eh in employeeHierarchy.InnerJoin(eh => e.ReportsTo == eh.EmployeeID)
 							select new EmployeeHierarchyCTE
 							{
@@ -357,7 +364,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Combinatorial]
+		[Test]
 		public void Test4([CteContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -376,6 +383,40 @@ namespace Tests.Linq
 				var resultdStr  = result.ToString();
 
 				AreEqual(expected, result);
+			}
+		}
+
+		[Test]
+		public void Test5([CteContextSource] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var cte1 = db.GetTable<Child>()
+					.Where(c => c.ParentID > 1)
+					.Select(child => new
+					{
+						child.ParentID,
+						child.ChildID
+					}).Distinct()
+					.AsCte();
+				var query = from p in db.Parent
+					join c in cte1 on p.ParentID equals c.ParentID
+					join c2 in cte1 on p.ParentID equals c2.ParentID
+					select p;
+
+				var cte1_ = db.GetTable<Child>().Where(c => c.ParentID > 1).Select(child => new
+				{
+					child.ParentID,
+					child.ChildID
+				}).Distinct();
+
+				var expected =
+					from p in db.Parent
+					join c in cte1_ on p.ParentID equals c.ParentID
+					join c2 in cte1_ on p.ParentID equals c2.ParentID
+					select p;
+
+				Assert.AreEqual(expected.Count(), query.Count());
 			}
 		}
 
@@ -406,11 +447,36 @@ namespace Tests.Linq
 			public int ParentID { get; set; }
 		}
 
-		[Test, Combinatorial]
+		[Test]
+		public void TestNoColumns([CteContextSource(true, ProviderName.DB2)] string context)
+		{
+			using (var db = GetDataContext(context))
+			//using (var testTable = db.CreateLocalTable<CteDMLTests>("CteChild"))
+			{
+				var expected = db.GetTable<Child>().Count();
+
+				var cte1 = db.GetTable<Child>().AsCte("CTE1_");
+				var cnt1 = cte1.Count();
+
+				Assert.AreEqual(expected, cnt1);
+
+				var query = db.GetTable<Child>().Select(c => new { C = new { c.ChildID }});
+				var cte2 = query.AsCte("CTE1_");
+				var cnt2 = cte2.Count();
+
+				Assert.AreEqual(expected, cnt2);
+
+				var any  = cte2.Any();
+
+				Assert.IsTrue(any);
+			}
+		}
+
+		[Test]
 		public void TestInsert([CteContextSource(true, ProviderName.DB2)] string context)
 		{
 			using (var db = GetDataContext(context))
-			using (var testTable = db.CreateLocalTable<CteDMLTests>("CteChild"))
+			using (var testTable = db.CreateLocalTable<CteDMLTests>(context, nameof(TestInsert), "CteChild"))
 			{
 				var cte1 = db.GetTable<Child>().Where(c => c.ParentID > 1).AsCte("CTE1_");
 				var toInsert = from p in cte1
@@ -439,7 +505,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Combinatorial]
+		[Test]
 		public void TestDelete([CteContextSource(ProviderName.Firebird, ProviderName.DB2)] string context)
 		{
 			using (var db  = GetDataContext(context))
@@ -458,7 +524,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Combinatorial]
+		[Test]
 		public void TestUpdate(
 			[CteContextSource(ProviderName.Firebird, ProviderName.DB2, ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative)]
 			string context)
@@ -491,7 +557,7 @@ namespace Tests.Linq
 			public int? GrandChildID;
 		}
 
-		[Test, Combinatorial]
+		[Test]
 		public void RecursiveTest([CteContextSource(true, ProviderName.DB2)] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -523,6 +589,378 @@ namespace Tests.Linq
 
 				var str = cteRecursive.ToString();
 				var result = cteRecursive.ToArray();
+			}
+		}
+
+		public class HierarchyTree
+		{
+			public int Id { get; set; }
+			public int? ParentId { get; set; }
+		}
+
+		HierarchyTree[] GeHirarchyData()
+		{
+			return new[]
+			{
+				new HierarchyTree { Id = 1, ParentId = null },
+				new HierarchyTree { Id = 2, ParentId = null },
+
+				// level 1
+
+				new HierarchyTree { Id = 10, ParentId = 1 },
+				new HierarchyTree { Id = 11, ParentId = 1 },
+
+				new HierarchyTree { Id = 20, ParentId = 2 },
+				new HierarchyTree { Id = 22, ParentId = 2 },
+
+				// level 2
+
+				new HierarchyTree { Id = 100, ParentId = 10 },
+				new HierarchyTree { Id = 101, ParentId = 10 },
+				new HierarchyTree { Id = 102, ParentId = 10 },
+
+				new HierarchyTree { Id = 110, ParentId = 11 },
+				new HierarchyTree { Id = 111, ParentId = 11 },
+				new HierarchyTree { Id = 112, ParentId = 11 },
+
+				new HierarchyTree { Id = 200, ParentId = 20 },
+				new HierarchyTree { Id = 201, ParentId = 20 },
+				new HierarchyTree { Id = 202, ParentId = 20 },
+
+				new HierarchyTree { Id = 210, ParentId = 21 },
+				new HierarchyTree { Id = 211, ParentId = 21 },
+				new HierarchyTree { Id = 212, ParentId = 21 },
+			};
+		}
+
+		class HierarchyData
+		{
+			public int Id { get; set; }
+			public int Level { get; set; }
+		}
+
+		IQueryable<HierarchyData> GetHierarchyDown(IQueryable<HierarchyTree> tree, IDataContext db)
+		{
+			var subCte1 = tree.Where(t => t.ParentId == null).AsCte();
+			var subCte2 = tree.AsCte();
+
+			var cte = db.GetCte<HierarchyData>(hierarchyDown =>
+				{
+					return subCte1.Select(t => new HierarchyData
+						{
+							Id = t.Id,
+							Level = 0
+						})
+						.Concat(
+							from h in hierarchyDown
+							from t in subCte2.InnerJoin(t => t.ParentId == h.Id)
+							select new HierarchyData
+							{
+								Id = t.Id,
+								Level = h.Level + 1
+							}
+						);
+				}
+			);
+
+			return cte;
+		}
+
+		IEnumerable<HierarchyData> EnumerateDown(HierarchyTree[] items, int currentLevel, int? currentParent)
+		{
+			foreach (var i in items.Where(i => i.ParentId == currentParent))
+			{
+				yield return new HierarchyData { Id = i.Id, Level = currentLevel };
+
+				foreach (var c in EnumerateDown(items, currentLevel + 1, i.Id))
+				{
+					yield return c;
+				}
+			}
+		}
+
+		[Test]
+		public void RecursiveTest2([CteContextSource(true, ProviderName.DB2)] string context)
+		{
+			var hierarchyData = GeHirarchyData();
+
+			using (var db = GetDataContext(context))
+			using (var tree = db.CreateLocalTable(context, "19", hierarchyData))
+			{
+				var hierarchy = GetHierarchyDown(tree, db);
+
+				var result = hierarchy.OrderBy(h => h.Id);
+				var expected = EnumerateDown(hierarchyData, 0, null).OrderBy(h => h.Id);
+
+				AreEqualWithComparer(expected, result);
+			}
+		}
+
+		[Test]
+		public void TestDoubleRecursion([CteContextSource(true, ProviderName.DB2)] string context)
+		{
+			var hierarchyData = GeHirarchyData();
+
+			using (var db = GetDataContext(context))
+			using (var tree = db.CreateLocalTable(context, "20", hierarchyData))
+			{
+				var hierarchy1 = GetHierarchyDown(tree, db);
+				var hierarchy2 = GetHierarchyDown(tree, db);
+
+				var query = from h1 in hierarchy1
+					from h2 in hierarchy2.InnerJoin(h2 => h2.Id == h1.Id)
+					select new
+					{
+						h1.Id,
+						LevelSum = h2.Level + h1.Level
+					};
+
+				var count = query.Count();
+
+				Assert.Greater(count, 0);
+			}
+		}
+
+		[Test]
+		public void RecursiveCount([CteContextSource(true, ProviderName.DB2)] string context)
+		{
+			var hierarchyData = GeHirarchyData();
+
+			using (var db = GetDataContext(context))
+			using (var tree = db.CreateLocalTable(context, "21", hierarchyData))
+			{
+				var hierarchy = GetHierarchyDown(tree, db);
+				var expected = EnumerateDown(hierarchyData, 0, null);
+
+				Assert.AreEqual(expected.Count(), hierarchy.Count());
+			}
+		}
+
+		[Test]
+		public void RecursiveInsertInto([CteContextSource(true, ProviderName.DB2)] string context)
+		{
+			var hierarchyData = GeHirarchyData();
+
+			using (var db          = GetDataContext(context))
+			using (var tree        = db.CreateLocalTable               (context, "17", hierarchyData))
+			using (var resultTable = db.CreateLocalTable<HierarchyData>(context, "18"))
+			{
+				var hierarchy = GetHierarchyDown(tree, db);
+				hierarchy.Insert(resultTable, r => r);
+
+				var result = resultTable.OrderBy(h => h.Id);
+				var expected = EnumerateDown(hierarchyData, 0, null).OrderBy(h => h.Id);
+
+				AreEqualWithComparer(expected, result);
+			}
+		}
+
+		[Test]
+		public void RecursiveDeepNesting([CteContextSource(true, ProviderName.DB2)] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (var tree = db.CreateLocalTable<HierarchyTree>(context, "22"))
+			{
+				var hierarchy = GetHierarchyDown(tree, db);
+
+				var query = from q in hierarchy
+					from data1 in tree.InnerJoin(data1 => data1.Id == q.Id)
+					from data2 in tree.InnerJoin(data2 => data2.Id == q.Id)
+					from data3 in tree.InnerJoin(data3 => data3.Id == q.Id)
+					from data4 in tree.InnerJoin(data4 => data4.Id == q.Id)
+					select new
+					{
+						q.Id,
+						q.Level
+					};
+
+				Assert.DoesNotThrow(() => Console.WriteLine(query.ToString()));
+			}
+		}
+
+		private class TestWrapper
+		{
+			public Child Child { get; set; }
+
+			protected bool Equals(TestWrapper other)
+			{
+				return Equals(Child, other.Child);
+			}
+
+			public override bool Equals(object obj)
+			{
+				if (ReferenceEquals(null, obj)) return false;
+				if (ReferenceEquals(this, obj)) return true;
+				if (obj.GetType() != this.GetType()) return false;
+				var result = Equals((TestWrapper)obj);
+				return result;
+			}
+
+			public override int GetHashCode()
+			{
+				return (Child != null ? Child.GetHashCode() : 0);
+			}
+		}
+
+		private class TestWrapper2
+		{
+			public Child Child   { get; set; }
+			public Parent Parent { get; set; }
+
+			protected bool Equals(TestWrapper2 other)
+			{
+				return Equals(Child, other.Child) && Equals(Parent, other.Parent);
+			}
+
+			public override bool Equals(object obj)
+			{
+				if (ReferenceEquals(null, obj)) return false;
+				if (ReferenceEquals(this, obj)) return true;
+				if (obj.GetType() != this.GetType()) return false;
+				return Equals((TestWrapper2)obj);
+			}
+
+			public override int GetHashCode()
+			{
+				unchecked
+				{
+					return ((Child != null ? Child.GetHashCode() : 0) * 397) ^ (Parent != null ? Parent.GetHashCode() : 0);
+				}
+			}
+		}
+
+		[Test]
+		public void TestWithWrapper([CteContextSource] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var cteQuery = db.GetTable<Child>()
+					.Select(child => new TestWrapper()
+					{
+						Child = child
+					});
+
+				var cte1 = cteQuery.AsCte();
+
+				var query = from p in db.Parent
+					join c in cte1 on p.ParentID equals c.Child.ParentID
+					select new {p, c};
+
+				var result = query.ToArray();
+
+				var expected =
+					from p in db.Parent
+					join c in cteQuery on p.ParentID equals c.Child.ParentID
+					select new {p, c};
+
+				Assert.AreEqual(expected, result);
+			}
+		}
+
+		[Test]
+		public void TestWithWrapperUnion([CteContextSource] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var cte1 = db.GetTable<Child>()
+					.Select(child => new TestWrapper2()
+					{
+						Child = child,
+						Parent = child.Parent
+					})
+					.AsCte();
+
+				var simpleQuery = db.Child.Select(child => new TestWrapper2
+				{
+					Parent = child.Parent,
+					Child = child
+				});
+
+				var query1 = simpleQuery.Union(cte1);
+				var query2 = cte1.Union(simpleQuery);
+
+				var cte1_ = Child
+					.Select(child => new TestWrapper2()
+					{
+						Child = child,
+						Parent = child.Parent
+					});
+
+				var simpleQuery_ = Child.Select(child => new TestWrapper2
+				{
+					Parent = child.Parent,
+					Child = child
+				});
+
+				var query1_ = simpleQuery_.Union(cte1_);
+				var query2_ = cte1_.Union(simpleQuery_);
+
+
+				AreEqual(query1_, query1);
+				AreEqual(query2_, query2);
+			}
+		}
+
+		[Test]
+		public void TestEmbedded([CteContextSource] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var cte1 = db.GetTable<Child>().Select(c => c.ChildID).AsCte("CTE_1");
+				var cte2 = cte1.Distinct().AsCte("CTE_2");
+				var cte3 = cte2.Distinct().AsCte("CTE_3");
+				var cte4 = cte3.Distinct().AsCte("CTE_3");
+
+				var qCte = db.Child.Where(w => w.ChildID.NotIn(cte4)).ToList();
+			}
+		}
+
+		class OrgGroupDepthWrapper
+		{
+			public OrgGroup OrgGroup { get; set; }
+			public int Depth { get; set; }
+		}
+
+		class OrgGroup
+		{
+			[PrimaryKey]
+			public int Id { get; set; }
+			public int ParentId { get; set; }
+			public string GroupName { get; set; }
+		}
+
+		[ActiveIssue(1644)]
+		[Test]
+		public void TestRecursiveObjects([CteContextSource] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable<OrgGroup>())
+			{
+				var queryable = db.GetTable<OrgGroup>();
+				var cte = db.GetCte<OrgGroupDepthWrapper>(previous =>
+				    {
+				        var parentQuery = from parent in queryable
+				            select new OrgGroupDepthWrapper
+				            {
+				                OrgGroup = parent,
+				                Depth = 0
+				            };
+
+				        var childQuery = from child in queryable
+				            from parent in previous.InnerJoin(parent => parent.OrgGroup.Id == child.ParentId)
+				            orderby parent.Depth + 1, child.GroupName
+				            select new OrgGroupDepthWrapper
+				            {
+				                OrgGroup = child,
+				                Depth = parent.Depth + 1
+				            };
+
+				        return parentQuery.Union(childQuery);
+				    })
+				    .Select(wrapper => wrapper.OrgGroup);
+
+				var result = cte.ToList();
+
 			}
 		}
 

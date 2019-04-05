@@ -83,27 +83,37 @@ namespace LinqToDB.SqlProvider
 			{
 				var foundCte  = new Dictionary<CteClause, HashSet<CteClause>>();
 
+				void RegisterDependency(CteClause cteClause)
+				{
+					if (foundCte.ContainsKey(cteClause))
+						return;
+
+					var dependsOn = new HashSet<CteClause>();
+					new QueryVisitor().Visit(cteClause.Body, ce =>
+					{
+						if (ce.ElementType == QueryElementType.SqlCteTable)
+						{
+							var subCte = ((SqlCteTable)ce).Cte;
+							dependsOn.Add(subCte);
+						}
+
+					});
+					// self-reference is allowed, so we do not need to add dependency
+					dependsOn.Remove(cteClause);
+					foundCte.Add(cteClause, dependsOn);
+
+					foreach (var clause in dependsOn)
+					{
+						RegisterDependency(clause);
+					}
+				}
+
 				new QueryVisitor().Visit(select.SelectQuery, e =>
 					{
 						if (e.ElementType == QueryElementType.SqlCteTable)
 						{
 							var cte = ((SqlCteTable)e).Cte;
-							if (!foundCte.ContainsKey(cte))
-							{
-								var dependsOn = new HashSet<CteClause>();
-								new QueryVisitor().Visit(cte.Body, ce =>
-								{
-									if (ce.ElementType == QueryElementType.SqlCteTable)
-									{
-										var subCte = ((SqlCteTable)ce).Cte;
-										dependsOn.Add(subCte);
-									}
-
-								});
-								// self-reference is allowed, so we do not need to add dependency
-								dependsOn.Remove(cte);
-								foundCte.Add(cte, dependsOn);
-							}
+							RegisterDependency(cte);
 						}
 					}
 				);
@@ -118,7 +128,8 @@ namespace LinqToDB.SqlProvider
 
 					var ordered = TopoSorting.TopoSort(foundCte.Keys, i => foundCte[i]).ToList();
 
-					Utils.MakeUniqueNames(ordered, c => c.Name, (c, n) => c.Name = n, "CTE_1");
+					Utils.MakeUniqueNames(ordered, n => !ReservedWords.IsReserved(n), c => c.Name, (c, n) => c.Name = n,
+						c => c.Name.IsNullOrEmpty() ? "CTE_1" : c.Name, StringComparer.OrdinalIgnoreCase);
 
 					select.With = new SqlWithClause();
 					select.With.Clauses.AddRange(ordered);
@@ -848,7 +859,11 @@ namespace LinqToDB.SqlProvider
 								innerExpr = c.Expression;
 
 							if (innerExpr is SqlField field)
+							{
 								parameterExpr2.DataType = field.DataType;
+								parameterExpr2.DbType   = field.DbType;
+								parameterExpr2.DbSize   = field.Length;
+							}
 						}
 
 						if (expr.Expr1 is SqlParameter parameterExpr1 && parameterExpr1.DataType == DataType.Undefined)
@@ -859,7 +874,11 @@ namespace LinqToDB.SqlProvider
 								innerExpr = c.Expression;
 
 							if (innerExpr is SqlField field)
+							{
 								parameterExpr1.DataType = field.DataType;
+								parameterExpr1.DbType   = field.DbType;
+								parameterExpr1.DbSize   = field.Length;
+							}
 						}
 
 						if (expr.Operator == SqlPredicate.Operator.Equal &&
@@ -982,7 +1001,7 @@ namespace LinqToDB.SqlProvider
 				{
 					var newOperator = InvertOperator(expr.Operator, false);
 					if (newOperator != expr.Operator)
-					{ 
+					{
 						predicate = new SqlPredicate.ExprExpr(expr.Expr1, newOperator, expr.Expr2);
 						isNot     = false;
 					}
@@ -1160,7 +1179,7 @@ namespace LinqToDB.SqlProvider
 				var newLength = maxLength >= 0 ? Math.Min(to.Length ?? 0, maxLength) : to.Length;
 
 				if (to.Length != newLength)
-					to = new SqlDataType(to.DataType, to.Type, newLength, null, null);
+					to = new SqlDataType(to.DataType, to.Type, newLength, null, null, to.DbType);
 			}
 			else if (from.Type == typeof(short) && to.Type == typeof(int))
 				return func.Parameters[2];
@@ -1448,7 +1467,7 @@ namespace LinqToDB.SqlProvider
 
 		public void OptimizeJoins(SqlStatement statement)
 		{
-			((ISqlExpressionWalkable) statement).Walk(false, element =>
+			((ISqlExpressionWalkable) statement).Walk(new WalkOptions(), element =>
 			{
 				if (element is SelectQuery query)
 					new JoinOptimizer().OptimizeJoins(statement, query);

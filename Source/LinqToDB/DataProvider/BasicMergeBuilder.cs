@@ -91,7 +91,7 @@ namespace LinqToDB.DataProvider
 				sourceKey,
 				Expression.Lambda<Func<TTarget, TSource, int>>(
 					Expression.Constant(0),
-					Expression.Parameter(typeof(TTarget), _targetAlias),
+					Expression.Parameter(typeof(TTarget), TargetAlias),
 					Expression.Parameter(typeof(TSource), SourceAlias)));
 
 			var ctx = target.Provider.Execute<ContextParser.Context>(
@@ -125,7 +125,7 @@ namespace LinqToDB.DataProvider
 			var ctx       = query.GetContext();
 			var statement = ctx.GetResultStatement();
 
-			var tables = MoveJoinsToSubqueries(statement, _targetAlias, SourceAlias, QueryElement.Where);
+			var tables = MoveJoinsToSubqueries(statement, TargetAlias, SourceAlias, QueryElement.Where);
 			SetSourceColumnAliases(statement.SelectQuery.Where.SearchCondition, tables.Item2.Source);
 
 			ctx.SetParameters();
@@ -208,18 +208,18 @@ namespace LinqToDB.DataProvider
 			// avoid parameters in source due to low limits for parameters number in providers
 			if (!valueConverter.TryConvert(Command, columnType, value))
 			{
-				AddSourceValueAsParameter(column.DataType, value);
+				AddSourceValueAsParameter(column.DataType, column.DbType, column.Length, value);
 			}
 		}
 
-		protected void AddSourceValueAsParameter(DataType dataType, object value)
+		protected void AddSourceValueAsParameter(DataType dataType, string dbType, int? size, object value)
 		{
 			var name     = GetNextParameterName();
 			var fullName = SqlBuilder.Convert(name, ConvertType.NameToQueryParameter).ToString();
 
 			Command.Append(fullName);
 
-			AddParameter(new DataParameter(name, value, dataType));
+			AddParameter(new DataParameter(name, value, dataType, dbType) { Size = size });
 		}
 
 		private void BuildAsSourceClause(IEnumerable<string> columnNames)
@@ -401,7 +401,7 @@ namespace LinqToDB.DataProvider
 
 				foreach (var columnInfo in ctx.Columns)
 				{
-					var columnDescriptor = _sourceDescriptor.Columns.Single(_ => _.MemberInfo == columnInfo.Members[0]);
+					var columnDescriptor = _sourceDescriptor.Columns.Single(_ => _.MemberInfo == columnInfo.MemberChain[0]);
 					var column           = statement.SelectQuery.Select.Columns[columnInfo.Index];
 
 					SetColumnAlias(column.Alias, columnDescriptor.ColumnName);
@@ -428,7 +428,7 @@ namespace LinqToDB.DataProvider
 
 				SaveParameters(statement.Parameters);
 
-				SqlBuilder.BuildSql(0, statement, Command, startIndent : 1);
+				SqlBuilder.BuildSqlWithAliases(0, statement, Command, startIndent : 1);
 
 				var cs = new [] { ' ', '\t', '\r', '\n' };
 
@@ -571,7 +571,7 @@ namespace LinqToDB.DataProvider
 
 		protected Expression<Func<TTarget, TSource, bool>> MakeDefaultMatchPredicate()
 		{
-			var pTarget = Expression.Parameter(typeof(TTarget), _targetAlias);
+			var pTarget = Expression.Parameter(typeof(TTarget), TargetAlias);
 			var pSource = Expression.Parameter(typeof(TSource), SourceAlias);
 
 			Expression ex = null;
@@ -599,7 +599,7 @@ namespace LinqToDB.DataProvider
 				.Append("MERGE INTO ")
 				.Append(TargetTableName)
 				.Append(" ")
-				.AppendLine((string)SqlBuilder.Convert(_targetAlias, ConvertType.NameToQueryTableAlias));
+				.AppendLine((string)SqlBuilder.Convert(TargetAlias, ConvertType.NameToQueryTableAlias));
 		}
 
 		protected virtual void BuildOperation(MergeDefinition<TTarget, TSource>.Operation operation)
@@ -704,7 +704,7 @@ namespace LinqToDB.DataProvider
 			if (predicate != null)
 			{
 				Command.Append("AND ");
-				BuildSingleTablePredicate(predicate, _targetAlias, false);
+				BuildSingleTablePredicate(predicate, TargetAlias, false);
 			}
 
 			Command
@@ -728,26 +728,29 @@ namespace LinqToDB.DataProvider
 				});
 
 			var qry = Query<int>.GetQuery(DataContext, ref insertExpression);
-			var statement = qry.Queries[0].Statement;
+			lock (qry)
+			{
+				var statement = qry.Queries[0].Statement;
 
-			// we need InsertOrUpdate for sql builder to generate values clause
-			var newInsert = new SqlInsertOrUpdateStatement(statement.SelectQuery) { Insert = statement.GetInsertClause(), Update = statement.GetUpdateClause() };
-			newInsert.Parameters.AddRange(statement.Parameters);
-			newInsert.Insert.Into.Alias = _targetAlias;
+				// we need InsertOrUpdate for sql builder to generate values clause
+				var newInsert = new SqlInsertOrUpdateStatement(statement.SelectQuery) { Insert = statement.GetInsertClause(), Update = statement.GetUpdateClause() };
+				newInsert.Parameters.AddRange(statement.Parameters);
+				newInsert.Insert.Into.Alias = TargetAlias;
 
-			var tables = MoveJoinsToSubqueries(newInsert, SourceAlias, null, QueryElement.InsertSetter);
-			SetSourceColumnAliases(newInsert.Insert, tables.Item1.Source);
+				var tables = MoveJoinsToSubqueries(newInsert, SourceAlias, null, QueryElement.InsertSetter);
+				SetSourceColumnAliases(newInsert.Insert, tables.Item1.Source);
 
-			qry.Queries[0].Statement = newInsert;
-			QueryRunner.SetParameters(qry, DataContext, insertExpression, null, 0);
+				qry.Queries[0].Statement = newInsert;
+				QueryRunner.SetParameters(qry, DataContext, insertExpression, null, 0);
 
-			SaveParameters(newInsert.Parameters);
+				SaveParameters(newInsert.Parameters);
 
-			if (IsIdentityInsertSupported
-				&& newInsert.Insert.Items.Any(_ => _.Column is SqlField field && field.IsIdentity))
-				OnInsertWithIdentity();
+				if (IsIdentityInsertSupported
+					&& newInsert.Insert.Items.Any(_ => _.Column is SqlField field && field.IsIdentity))
+					OnInsertWithIdentity();
 
-			SqlBuilder.BuildInsertClauseHelper(newInsert, Command);
+				SqlBuilder.BuildInsertClauseHelper(newInsert, Command);
+			}
 		}
 
 		protected void BuildDefaultInsert()
@@ -859,20 +862,23 @@ namespace LinqToDB.DataProvider
 				new[] { updateQuery.Expression, target.Expression, Expression.Quote(predicate) });
 
 			var qry   = Query<int>.GetQuery(DataContext, ref updateExpression);
-			var statement = qry.Queries[0].Statement;
-
-			if (ProviderUsesAlternativeUpdate)
-				BuildAlternativeUpdateQuery(statement);
-			else
+			lock (qry)
 			{
-				var tables = MoveJoinsToSubqueries(statement, _targetAlias, SourceAlias, QueryElement.UpdateSetter);
-				SetSourceColumnAliases(statement.RequireUpdateClause(), tables.Item2.Source);
+				var statement = qry.Queries[0].Statement;
+
+				if (ProviderUsesAlternativeUpdate)
+					BuildAlternativeUpdateQuery(statement);
+				else
+				{
+					var tables = MoveJoinsToSubqueries(statement, TargetAlias, SourceAlias, QueryElement.UpdateSetter);
+					SetSourceColumnAliases(statement.RequireUpdateClause(), tables.Item2.Source);
+				}
+
+				QueryRunner.SetParameters(qry, DataContext, updateExpression, null, 0);
+				SaveParameters(statement.Parameters);
+
+				SqlBuilder.BuildUpdateSetHelper((SqlUpdateStatement)statement, Command);
 			}
-
-			QueryRunner.SetParameters(qry, DataContext, updateExpression, null, 0);
-			SaveParameters(statement.Parameters);
-
-			SqlBuilder.BuildUpdateSetHelper((SqlUpdateStatement)statement, Command);
 		}
 
 		private void BuildAlternativeUpdateQuery(SqlStatement statement)
@@ -880,7 +886,7 @@ namespace LinqToDB.DataProvider
 			var query    = statement.EnsureQuery();
 			var subQuery = (SelectQuery)QueryVisitor.Find(query.Where.SearchCondition, e => e.ElementType == QueryElementType.SqlQuery);
 			var target   = query.From.Tables[0];
-			target.Alias = _targetAlias;
+			target.Alias = TargetAlias;
 
 			SqlTableSource source;
 
@@ -910,7 +916,7 @@ namespace LinqToDB.DataProvider
 					}
 				});
 
-				((ISqlExpressionWalkable)statement.RequireUpdateClause()).Walk(true,
+				((ISqlExpressionWalkable)statement.RequireUpdateClause()).Walk(new WalkOptions(true),
 					element => ConvertToSubquery(subQuery, element, tableSet, tables, (SqlTable)target.Source,
 						(SqlTable)source.Source));
 			}
@@ -1085,7 +1091,7 @@ namespace LinqToDB.DataProvider
 						throw new InvalidOperationException();
 				}
 
-				queryPart.Walk(true, element => ConvertToSubquery(statement.SelectQuery, element, tableSet, tables, firstTable, secondTable));
+				queryPart.Walk(new WalkOptions(true), element => ConvertToSubquery(statement.SelectQuery, element, tableSet, tables, firstTable, secondTable));
 			}
 
 			var table1   = statement.SelectQuery.From.Tables[0];
@@ -1129,7 +1135,7 @@ namespace LinqToDB.DataProvider
 			if (predicate != null)
 			{
 				Command.Append("AND ");
-				BuildSingleTablePredicate(predicate, _targetAlias, false);
+				BuildSingleTablePredicate(predicate, TargetAlias, false);
 			}
 
 			Command.AppendLine("THEN UPDATE");
@@ -1140,15 +1146,18 @@ namespace LinqToDB.DataProvider
 				new[] { _connection.GetTable<TTarget>().Expression, Expression.Quote(update) });
 
 			var qry = Query<int>.GetQuery(DataContext, ref updateExpression);
-			var statement = (SqlUpdateStatement)qry.Queries[0].Statement;
+			lock (qry)
+			{
+				var statement = (SqlUpdateStatement)qry.Queries[0].Statement;
 
-			MoveJoinsToSubqueries(statement, _targetAlias, null, QueryElement.UpdateSetter);
+				MoveJoinsToSubqueries(statement, TargetAlias, null, QueryElement.UpdateSetter);
 
-			QueryRunner.SetParameters(qry, DataContext, updateExpression, null, 0);
+				QueryRunner.SetParameters(qry, DataContext, updateExpression, null, 0);
 
-			SaveParameters(statement.Parameters);
+				SaveParameters(statement.Parameters);
 
-			SqlBuilder.BuildUpdateSetHelper(statement, Command);
+				SqlBuilder.BuildUpdateSetHelper(statement, Command);
+			}
 		}
 		#endregion
 
@@ -1173,10 +1182,7 @@ namespace LinqToDB.DataProvider
 		public bool NoopCommand { get; private set; }
 
 
-		protected string GetNextParameterName()
-		{
-			return string.Format("p{0}", Interlocked.Increment(ref _parameterCnt));
-		}
+		protected string GetNextParameterName() => $"p{Interlocked.Increment(ref _parameterCnt)}";
 
 		private void SaveParameters(IEnumerable<SqlParameter> parameters)
 		{
@@ -1184,15 +1190,15 @@ namespace LinqToDB.DataProvider
 			{
 				param.Name = GetNextParameterName();
 
-				AddParameter(new DataParameter(param.Name, param.Value, param.DataType));
+				AddParameter(new DataParameter(param.Name, param.Value, param.DataType, param.DbType) { Size = param.DbSize });
 			}
 		}
 		#endregion
 
 		#region Query Generation
 		protected readonly string SourceAlias = "Source";
+		protected readonly string TargetAlias = "Target";
 
-		readonly string           _targetAlias = "Target";
 		readonly DataConnection   _connection;
 		         EntityDescriptor _sourceDescriptor;
 
@@ -1368,6 +1374,11 @@ namespace LinqToDB.DataProvider
 		protected virtual bool SameTypeOperationsAllowed => true;
 
 		/// <summary>
+		/// If true, merge command could have hints specified.
+		/// </summary>
+		protected virtual bool MergeHintsSupported => false;
+
+		/// <summary>
 		/// When this operation enabled, merge command cannot include Delete or Update operations together with
 		/// UpdateWithDelete operation in single command. Also use of Delte and Update operations in the same command
 		/// not allowed even without UpdateWithDelete operation.
@@ -1382,7 +1393,11 @@ namespace LinqToDB.DataProvider
 		{
 			// validate operations limit
 			if (MaxOperationsCount > 0 && Merge.Operations.Length > MaxOperationsCount)
-				throw new LinqToDBException(string.Format("Merge cannot contain more than {1} operations for {0} provider.", ProviderName, MaxOperationsCount));
+				throw new LinqToDBException($"Merge cannot contain more than {MaxOperationsCount} operations for {ProviderName} provider.");
+
+			// check hint support
+			if (Merge.Hint != null && !MergeHintsSupported)
+				throw new LinqToDBException($"Merge hints not supported by {ProviderName} provider.");
 
 			// - validate that specified operations supported by provider
 			// - validate that operations don't have conditions if provider doesn't support them
