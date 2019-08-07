@@ -14,11 +14,12 @@ using JetBrains.Annotations;
 
 namespace LinqToDB.Data
 {
+	using Async;
 	using Common;
 	using Configuration;
 	using DataProvider;
+	using DbCommandProcessor;
 	using Expressions;
-	using LinqToDB.Async;
 	using Mapping;
 	using RetryPolicy;
 
@@ -185,9 +186,11 @@ namespace LinqToDB.Data
 			{
 				var connection = connectionFactory();
 
-				if (!Configuration.AvoidSpecificDataProviderAPI && !DataProvider.IsCompatibleConnection(connection))
+				var baseConnection = connection is IAsyncDbConnection asyncConnection ? asyncConnection.Connection : connection;
+
+				if (!Configuration.AvoidSpecificDataProviderAPI && !DataProvider.IsCompatibleConnection(baseConnection))
 					throw new LinqToDBException(
-						$"DataProvider '{DataProvider}' and connection '{connection}' are not compatible.");
+						$"DataProvider '{DataProvider}' and connection '{baseConnection}' are not compatible.");
 
 				return connection;
 			};
@@ -240,13 +243,14 @@ namespace LinqToDB.Data
 
 			InitConfig();
 
-			if (!Configuration.AvoidSpecificDataProviderAPI && !dataProvider.IsCompatibleConnection(connection))
+			_connection = AsyncFactory.Create(connection);
+
+			if (!Configuration.AvoidSpecificDataProviderAPI && !dataProvider.IsCompatibleConnection(_connection.Connection))
 				throw new LinqToDBException(
-					$"DataProvider '{dataProvider}' and connection '{connection}' are not compatible.");
+					$"DataProvider '{dataProvider}' and connection '{_connection.Connection}' are not compatible.");
 
 			DataProvider       = dataProvider;
 			MappingSchema      = DataProvider.MappingSchema;
-			_connection        = AsyncFactory.Create(connection);
 			_disposeConnection = disposeConnection;
 		}
 
@@ -1050,31 +1054,42 @@ namespace LinqToDB.Data
 		/// </summary>
 		public string LastQuery;
 
-		internal void InitCommand(CommandType commandType, string sql, DataParameter[] parameters, List<string> queryHints)
+		internal void InitCommand(CommandType commandType, string sql, DataParameter[] parameters, List<string> queryHints, bool withParameters)
 		{
 			if (queryHints?.Count > 0)
 			{
-				var sqlProvider = DataProvider.CreateSqlBuilder();
+				var sqlProvider = DataProvider.CreateSqlBuilder(MappingSchema);
 				sql = sqlProvider.ApplyQueryHints(sql, queryHints);
 				queryHints.Clear();
 			}
 
-			DataProvider.InitCommand(this, commandType, sql, parameters);
+			DataProvider.InitCommand(this, commandType, sql, parameters, withParameters);
 			LastQuery = Command.CommandText;
 		}
 
 		private int? _commandTimeout;
 		/// <summary>
-		/// Gets or sets command execution timeout. By default timeout is 0 (infinity).
+		/// Gets or sets command execution timeout in seconds.
+		/// Negative timeout value means that default timeout will be used.
+		/// 0 timeout value corresponds to infinite timeout.
+		/// By default timeout is not set and default value for current provider used.
 		/// </summary>
 		public  int   CommandTimeout
 		{
-			get => _commandTimeout ?? 0;
+			get => _commandTimeout ?? -1;
 			set
 			{
-				_commandTimeout = value;
-				if (_command != null)
-					_command.CommandTimeout = value;
+				if (value < 0)
+				{
+					_commandTimeout = null;
+					DisposeCommand();
+				}
+				else
+				{
+					_commandTimeout = value;
+					if (_command != null)
+						_command.CommandTimeout = value;
+				}
 			}
 		}
 
@@ -1116,11 +1131,18 @@ namespace LinqToDB.Data
 			}
 		}
 
+		#region ExecuteNonQuery
+
+		protected virtual int ExecuteNonQuery(IDbCommand command)
+		{
+			return Command.ExecuteNonQueryExt();
+		}
+
 		internal int ExecuteNonQuery()
 		{
 			if (TraceSwitch.Level == TraceLevel.Off || OnTraceConnection == null)
 				using (DataProvider.ExecuteScope())
-					return Command.ExecuteNonQuery();
+					return ExecuteNonQuery(Command);
 
 			var now = DateTime.UtcNow;
 			var sw  = Stopwatch.StartNew();
@@ -1136,12 +1158,11 @@ namespace LinqToDB.Data
 				});
 			}
 
-
 			try
 			{
 				int ret;
 				using (DataProvider.ExecuteScope())
-					ret = Command.ExecuteNonQuery();
+					ret = ExecuteNonQuery(Command);
 
 				if (TraceSwitch.TraceInfo)
 				{
@@ -1177,10 +1198,19 @@ namespace LinqToDB.Data
 			}
 		}
 
+		#endregion
+
+		#region ExecuteScalar
+
+		protected virtual object ExecuteScalar(IDbCommand command)
+		{
+			return Command.ExecuteScalarExt();
+		}
+
 		object ExecuteScalar()
 		{
 			if (TraceSwitch.Level == TraceLevel.Off || OnTraceConnection == null)
-				return Command.ExecuteScalar();
+				return ExecuteScalar(Command);
 
 			var now = DateTime.UtcNow;
 			var sw  = Stopwatch.StartNew();
@@ -1198,7 +1228,7 @@ namespace LinqToDB.Data
 
 			try
 			{
-				var ret = Command.ExecuteScalar();
+				var ret = ExecuteScalar(Command);
 
 				if (TraceSwitch.TraceInfo)
 				{
@@ -1233,16 +1263,25 @@ namespace LinqToDB.Data
 			}
 		}
 
-		private IDataReader ExecuteReader()
+		#endregion
+
+		#region ExecuteReader
+
+		protected virtual IDataReader ExecuteReader(IDbCommand command, CommandBehavior commandBehavior)
 		{
-			return ExecuteReader(GetCommandBehavior(CommandBehavior.Default));
+			return command.ExecuteReaderExt(commandBehavior);
+		}
+
+		IDataReader ExecuteReader()
+		{
+			return ExecuteReader(CommandBehavior.Default);
 		}
 
 		internal IDataReader ExecuteReader(CommandBehavior commandBehavior)
 		{
 			if (TraceSwitch.Level == TraceLevel.Off || OnTraceConnection == null)
 				using (DataProvider.ExecuteScope())
-					return Command.ExecuteReader(GetCommandBehavior(commandBehavior));
+					return ExecuteReader(Command, GetCommandBehavior(commandBehavior));
 
 			var now = DateTime.UtcNow;
 			var sw  = Stopwatch.StartNew();
@@ -1263,7 +1302,7 @@ namespace LinqToDB.Data
 				IDataReader ret;
 
 				using (DataProvider.ExecuteScope())
-					ret = Command.ExecuteReader(GetCommandBehavior(commandBehavior));
+					ret = ExecuteReader(Command, GetCommandBehavior(commandBehavior));
 
 				if (TraceSwitch.TraceInfo)
 				{
@@ -1297,6 +1336,8 @@ namespace LinqToDB.Data
 				throw;
 			}
 		}
+
+		#endregion
 
 		/// <summary>
 		/// Removes cached data mappers.

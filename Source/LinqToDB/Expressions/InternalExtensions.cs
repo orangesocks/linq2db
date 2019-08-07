@@ -437,11 +437,27 @@ namespace LinqToDB.Expressions
 					return arr.Any(a => a != null) ? arr : null;
 				});
 
+			bool DefaultCompareArguments(Expression arg1, Expression arg2)
+			{
+				if (typeof(Sql.IQueryableContainer).IsSameOrParentOf(arg1.Type))
+				{
+					if (arg1.NodeType == ExpressionType.Constant && arg2.NodeType == ExpressionType.Constant)
+					{
+						var query1 = ((Sql.IQueryableContainer)arg1.EvaluateExpression()).Query;
+						var query2 = ((Sql.IQueryableContainer)arg2.EvaluateExpression()).Query;
+						return EqualsTo(query1.Expression, query2.Expression, info);
+					}
+				}
+				if (!arg1.EqualsTo(arg2, info))
+						return false;
+				return true;
+			}
+
 			if (dependentParameters == null)
 			{
 				for (var i = 0; i < expr1.Arguments.Count; i++)
 				{
-					if (!expr1.Arguments[i].EqualsTo(expr2.Arguments[i], info))
+					if (!DefaultCompareArguments(expr1.Arguments[i], expr2.Arguments[i]))
 						return false;
 				}
 			}
@@ -457,8 +473,10 @@ namespace LinqToDB.Expressions
 							return false;
 					}
 					else
-						if (!expr1.Arguments[i].EqualsTo(expr2.Arguments[i], info))
+					{
+						if (!DefaultCompareArguments(expr1.Arguments[i], expr2.Arguments[i]))
 							return false;
+					}
 				}
 			}
 
@@ -789,17 +807,10 @@ namespace LinqToDB.Expressions
 
 			switch (ex.NodeType)
 			{
-				case ExpressionType.Quote          : return ((UnaryExpression)ex).Operand.Unwrap();
+				case ExpressionType.Quote          :
 				case ExpressionType.ConvertChecked :
 				case ExpressionType.Convert        :
-					{
-						var ue = (UnaryExpression)ex;
-
-						if (!ue.Operand.Type.IsEnumEx())
-							return ue.Operand.Unwrap();
-
-						break;
-					}
+					return ((UnaryExpression)ex).Operand.Unwrap();
 			}
 
 			return ex;
@@ -812,21 +823,11 @@ namespace LinqToDB.Expressions
 
 			switch (ex.NodeType)
 			{
-				case ExpressionType.Quote: return ((UnaryExpression)ex).Operand.Unwrap();
-				case ExpressionType.ConvertChecked:
-				case ExpressionType.Convert:
 				case ExpressionType.TypeAs:
-					{
-						var ue = (UnaryExpression)ex;
-
-						if (!ue.Operand.Type.IsEnumEx())
-							return ue.Operand.Unwrap();
-
-						break;
-					}
+					return ((UnaryExpression)ex).Operand.Unwrap();
 			}
 
-			return ex;
+			return ex.Unwrap();
 		}
 
 		public static Expression SkipPathThrough(this Expression expr)
@@ -834,6 +835,12 @@ namespace LinqToDB.Expressions
 			while (expr is MethodCallExpression mce && mce.IsQueryable("AsQueryable"))
 				expr = mce.Arguments[0];
 			return expr;
+		}
+
+		public static Expression SkipMethodChain(this Expression expr, MappingSchema mappingSchema)
+		{
+			var result = Sql.ExtensionAttribute.ExcludeExtensionChain(mappingSchema, expr);
+			return result;
 		}
 
 		public static Dictionary<Expression,Expression> GetExpressionAccessors(this Expression expression, Expression path)
@@ -885,6 +892,8 @@ namespace LinqToDB.Expressions
 		{
 			if (expr == null)
 				return null;
+
+			expr = expr.SkipMethodChain(mapping);
 
 			switch (expr.NodeType)
 			{
@@ -986,6 +995,14 @@ namespace LinqToDB.Expressions
 			return false;
 		}
 
+		public static bool IsExtensionMethod(this MethodCallExpression methodCall, MappingSchema mapping)
+		{
+			var functions = mapping.GetAttributes<Sql.ExtensionAttribute>(methodCall.Method.ReflectedTypeEx(),
+				methodCall.Method,
+				f => f.Configuration);
+			return functions.Any();
+		}
+
 		public static bool IsQueryable(this MethodCallExpression method, string name)
 		{
 			return method.Method.Name == name && method.IsQueryable();
@@ -1011,6 +1028,13 @@ namespace LinqToDB.Expressions
 			return false;
 		}
 
+		public static bool IsSameGenericMethod(this MethodCallExpression method, MethodInfo genericMethodInfo)
+		{
+			if (!method.Method.IsGenericMethod)
+				return false;
+			return method.Method.GetGenericMethodDefinition() == genericMethodInfo;
+		}
+
 		public static bool IsAssociation(this MethodCallExpression method, MappingSchema mappingSchema)
 		{
 			return mappingSchema.GetAttribute<AssociationAttribute>(method.Method.DeclaringType, method.Method) != null;
@@ -1025,7 +1049,7 @@ namespace LinqToDB.Expressions
 						var call = (MethodCallExpression)expression;
 						var expr = call.Object;
 
-						if (expr == null && (call.IsQueryable() || call.IsAggregate(mapping) || call.IsAssociation(mapping) || call.Method.IsSqlPropertyMethodEx()) && call.Arguments.Count > 0)
+						if (expr == null && (call.IsQueryable() || call.IsAggregate(mapping) || call.IsExtensionMethod(mapping) || call.IsAssociation(mapping) || call.Method.IsSqlPropertyMethodEx()) && call.Arguments.Count > 0)
 							expr = call.Arguments[0];
 
 						if (expr != null)

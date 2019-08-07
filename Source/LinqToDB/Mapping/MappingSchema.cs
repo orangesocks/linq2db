@@ -467,7 +467,7 @@ namespace LinqToDB.Mapping
 			DbDataType                      fromType,
 			DbDataType                      toType,
 			[JetBrains.Annotations.NotNull] LambdaExpression expr,
-			bool addNullCheck = true)
+			bool                            addNullCheck = true)
 		{
 			if (expr == null) throw new ArgumentNullException(nameof(expr));
 
@@ -964,17 +964,23 @@ namespace LinqToDB.Mapping
 		/// <param name="type">Attributes owner type.</param>
 		/// <param name="configGetter">Attribute configuration name provider.</param>
 		/// <param name="inherit">If <c>true</c> - include inherited attributes.</param>
+		/// <param name="exactForConfiguration">If <c>true</c> - only associated to configuration attributes will be returned.</param>
 		/// <returns>Attributes of specified type.</returns>
-		public T[] GetAttributes<T>(Type type, Func<T,string> configGetter, bool inherit = true)
+		public T[] GetAttributes<T>(Type type, Func<T,string> configGetter, bool inherit = true, 
+			bool exactForConfiguration = false)
 			where T : Attribute
 		{
 			var list  = new List<T>();
 			var attrs = GetAttributes<T>(type, inherit);
 
 			foreach (var c in ConfigurationList)
+			{
 				foreach (var a in attrs)
 					if (configGetter(a) == c)
 						list.Add(a);
+				if (exactForConfiguration && list.Count > 0)
+					return list.ToArray();
+			}
 
 			return list.Concat(attrs.Where(a => string.IsNullOrEmpty(configGetter(a)))).ToArray();
 		}
@@ -988,17 +994,23 @@ namespace LinqToDB.Mapping
 		/// <param name="memberInfo">Attributes owner member.</param>
 		/// <param name="configGetter">Attribute configuration name provider.</param>
 		/// <param name="inherit">If <c>true</c> - include inherited attributes.</param>
+		/// <param name="exactForConfiguration">If <c>true</c> - only associated to configuration attributes will be returned.</param>
 		/// <returns>Attributes of specified type.</returns>
-		public T[] GetAttributes<T>(Type type, MemberInfo memberInfo, Func<T,string> configGetter, bool inherit = true)
+		public T[] GetAttributes<T>(Type type, MemberInfo memberInfo, Func<T,string> configGetter, bool inherit = true, 
+			bool exactForConfiguration = false)
 			where T : Attribute
 		{
 			var list  = new List<T>();
 			var attrs = GetAttributes<T>(type, memberInfo, inherit);
 
 			foreach (var c in ConfigurationList)
+			{
 				foreach (var a in attrs)
 					if (configGetter(a) == c)
 						list.Add(a);
+				if (exactForConfiguration && list.Count > 0)
+					return list.ToArray();
+			}
 
 			return list.Concat(attrs.Where(a => string.IsNullOrEmpty(configGetter(a)))).ToArray();
 		}
@@ -1559,5 +1571,17 @@ namespace LinqToDB.Mapping
 		}
 
 		#endregion
+
+		internal IEnumerable<T> SortByConfiguration<T>(Func<T, string> configGetter, IEnumerable<T> values)
+		{
+			return values
+				.Select(val => new
+				{
+					Value = val,
+					Order = Array.IndexOf(ConfigurationList, configGetter(val)) == -1 ? ConfigurationList.Length : Array.IndexOf(ConfigurationList, configGetter(val))
+				})
+				.OrderBy(_ => _.Order)
+				.Select(_ => _.Value);
+		}
 	}
 }

@@ -47,10 +47,69 @@ namespace LinqToDB.Linq.Builder
 			_convertedExpressions.Remove(ex);
 		}
 
-		public Expression BuildExpression(IBuildContext context, Expression expression, bool enforceServerSide)
+		public Expression BuildExpression(IBuildContext context, Expression expression, bool enforceServerSide, string alias = null)
 		{
-			var newExpr = expression.Transform(expr => TransformExpression(context, expr, enforceServerSide, null));
+			var newExpr = expression.Transform(expr => TransformExpression(context, expr, enforceServerSide, alias));
 			return newExpr;
+		}
+
+		Expression ConvertAssignmentArgument(IBuildContext context, Expression expr, MemberInfo memberInfo, bool enforceServerSide,
+			string alias)
+		{
+			var resultExpr = expr;
+			resultExpr = CorrectConditional(context, resultExpr, enforceServerSide, alias);
+
+			// Update nullability
+			resultExpr = resultExpr.Transform(UpdateNullabilityFromExtension);
+
+			if (resultExpr.NodeType == ExpressionType.Convert || resultExpr.NodeType == ExpressionType.ConvertChecked)
+			{
+				var conv = (UnaryExpression)resultExpr;
+				if (memberInfo?.GetMemberType().IsNullable() == true
+					&& conv.Operand is ConvertFromDataReaderExpression readerExpression
+					&& !readerExpression.Type.IsNullable())
+				{
+					resultExpr = readerExpression.MakeNullable();
+				}
+			}
+			else if (resultExpr.NodeType == ExpressionType.Extension &&
+					 resultExpr is ConvertFromDataReaderExpression readerExpression)
+			{
+				if (memberInfo?.GetMemberType().IsNullable() == true &&
+					!readerExpression.Type.IsNullable())
+				{
+					resultExpr = readerExpression.MakeNullable();
+				}
+			}
+
+			return resultExpr;
+		}
+
+		private Expression UpdateNullabilityFromExtension(Expression resultExpr)
+		{
+			if (resultExpr.NodeType == ExpressionType.Call)
+			{
+				var mc = (MethodCallExpression)resultExpr;
+				var attr = MappingSchema.GetAttribute<Sql.ExpressionAttribute>(mc.Type, mc.Method);
+
+				if (attr != null
+					&& attr.IsNullable == Sql.IsNullableType.IfAnyParameterNullable
+					&& mc.Arguments.Count == 1
+					&& attr.Expression == "{0}"
+					&& mc.Method.ReturnParameter?.ParameterType.IsNullable() == true
+				)
+				{
+					var parameter = mc.Method.GetParameters()[0];
+					if (mc.Method.ReturnParameter?.ParameterType != parameter.ParameterType
+						&& parameter.ParameterType.IsValueTypeEx()
+						&& mc.Arguments[0] is ConvertFromDataReaderExpression readerExpression)
+					{
+						resultExpr = readerExpression.MakeNullable();
+					}
+				}
+			}
+
+			return resultExpr;
 		}
 
 		TransformInfo TransformExpression(IBuildContext context, Expression expr, bool enforceServerSide, string alias)
@@ -103,22 +162,6 @@ namespace LinqToDB.Linq.Builder
 
 						if (ma.Member.IsNullableValueMember())
 							break;
-
-						if (ma.Member.IsNullableHasValueMember())
-						{
-							Expression e = Expression.NotEqual(
-								ma.Expression, Expression.Constant(null, ma.Expression.Type));
-
-							return new TransformInfo(
-								BuildExpression(
-									context,
-									ma.Expression.Type.IsPrimitiveEx() ?
-										Expression.Call(
-											MemberHelper.MethodOf(() => Sql.AsSql(true)),
-											e) :
-										e, enforceServerSide),
-								true);
-						}
 
 						var ctx = GetContext(context, ma);
 
@@ -225,19 +268,6 @@ namespace LinqToDB.Linq.Builder
 
 					break;
 
-				case ExpressionType.Conditional:
-					var cond    = (ConditionalExpression)expr;
-					var newTest = CorrectEquality(context, cond.Test);
-					if (newTest != cond.Test)
-					{
-						cond = cond.Update(newTest, cond.IfTrue, cond.IfFalse);
-						return new TransformInfo(BuildExpression(context, cond, enforceServerSide));
-					}
-
-					if (CanBeTranslatedToSql(context, ConvertExpression(expr), true))
-						return new TransformInfo(BuildSql(context, expr, alias));
-					break;
-
 				case ExpressionType.Call:
 					{
 						var ce = (MethodCallExpression)expr;
@@ -290,67 +320,65 @@ namespace LinqToDB.Linq.Builder
 					{
 						var ne = (NewExpression)expr;
 
-						List<Expression> arguments = new List<Expression>();
+						List<Expression> arguments = null;
 						for (var i = 0; i < ne.Arguments.Count; i++)
 						{
-							var a = ne.Arguments[i];
+							var argument    = ne.Arguments[i];
 							var memberAlias = ne.Members?[i].Name;
-							var newArgument =
-								a.Transform(ae => TransformExpression(context, ae, enforceServerSide, memberAlias));
 
-							// Update nullability
-							if (newArgument.NodeType == ExpressionType.Call)
+							var newArgument = ConvertAssignmentArgument(context, argument, ne.Members?[i], enforceServerSide, memberAlias);
+							if (newArgument != argument)
 							{
-								var mc = (MethodCallExpression)newArgument;
-								var attr = MappingSchema.GetAttribute<Sql.ExpressionAttribute>(mc.Type, mc.Method);
-
-								if (attr != null 
-								    && attr.IsNullable == Sql.IsNullableType.IfAnyParameterNullable 
-								    && mc.Arguments.Count == 1 
-									&& attr.Expression == "{0}" 
-								    && mc.Method.ReturnParameter?.ParameterType.IsNullable() == true
-								)
-								{
-									var parameter = mc.Method.GetParameters()[0];
-									if (mc.Method.ReturnParameter?.ParameterType != parameter.ParameterType 
-										&& parameter.ParameterType.IsValueTypeEx()
-										&& mc.Arguments[0] is ConvertFromDataReaderExpression readerExpression)
-									{
-										newArgument = readerExpression.MakeNullable();
-									}
-								}
+								if (arguments == null)
+									arguments = ne.Arguments.Take(i).ToList();
 							}
-							else if (newArgument.NodeType == ExpressionType.Convert || newArgument.NodeType == ExpressionType.ConvertChecked)
-							{
-								var conv = (UnaryExpression)newArgument;
-								if (ne.Members?[i].GetMemberType().IsNullable() == true
-								    && conv.Operand is ConvertFromDataReaderExpression readerExpression
-								    && !readerExpression.Type.IsNullable())
-								{
-									newArgument = readerExpression.MakeNullable();
-								}
-							}
-							else if (newArgument.NodeType == ExpressionType.Extension &&
-							         newArgument is ConvertFromDataReaderExpression readerExpression)
-							{
-								if (ne.Members?[i].GetMemberType().IsNullable() == true &&
-								    !readerExpression.Type.IsNullable())
-								{
-									newArgument = readerExpression.MakeNullable();
-								}
-							}
-
-							a = newArgument;
-							arguments.Add(a);
+							arguments?.Add(newArgument);
 						}
 
-						if (arguments.Count > 0)
+						if (arguments != null)
 						{
 							ne = ne.Update(arguments);
 						}
 
 						return new TransformInfo(ne, true);
 					}
+
+				case ExpressionType.MemberInit:
+					{
+						var mi      = (MemberInitExpression)expr;
+						var newPart = (NewExpression)BuildExpression(context, mi.NewExpression, enforceServerSide);
+						List<MemberBinding> bindings = null;
+						for (var i = 0; i < mi.Bindings.Count; i++)
+						{
+							var binding    = mi.Bindings[i];
+							var newBinding = binding;
+							if (binding is MemberAssignment assignment)
+							{
+								var argument = ConvertAssignmentArgument(context, assignment.Expression,
+									assignment.Member, enforceServerSide, assignment.Member.Name);
+								if (argument != assignment.Expression)
+								{
+									newBinding = Expression.Bind(assignment.Member, argument);
+								}
+							}
+
+							if (newBinding != binding)
+							{
+								if (bindings == null)
+									bindings = mi.Bindings.Take(i).ToList();
+							}
+
+							bindings?.Add(newBinding);
+						}
+
+						if (mi.NewExpression != newPart || bindings != null)
+						{
+							mi = mi.Update(newPart, bindings ?? mi.Bindings.AsEnumerable());
+						}
+
+						return new TransformInfo(mi, true);
+					}
+
 			}
 
 			if (EnforceServerSide(context))
@@ -371,64 +399,80 @@ namespace LinqToDB.Linq.Builder
 			return new TransformInfo(expr);
 		}
 
-		Expression CorrectEquality(IBuildContext context, Expression expr)
+		Expression CorrectConditional(IBuildContext context, Expression expr, bool enforceServerSide, string alias)
 		{
-			var result = expr.Transform(e =>
+			if (expr.NodeType != ExpressionType.Conditional)
+				return BuildExpression(context, expr, enforceServerSide, alias);
+
+			var cond = (ConditionalExpression)expr;
+
+			if (cond.Test.NodeType == ExpressionType.Equal || cond.Test.NodeType == ExpressionType.NotEqual)
 			{
-				if (e.NodeType == ExpressionType.Equal || e.NodeType == ExpressionType.NotEqual)
+				var b = (BinaryExpression)cond.Test;
+
+				Expression cnt = null;
+				Expression obj = null;
+
+				if (IsNullConstant(b.Left))
 				{
-					var b = (BinaryExpression)e;
+					cnt = b.Left;
+					obj = b.Right;
+				}
+				else if (IsNullConstant(b.Right))
+				{
+					cnt = b.Right;
+					obj = b.Left;
+				}
 
-					Expression cnt = null;
-					Expression obj = null;
-
-					if      (IsNullConstant(b.Left))  { cnt = b.Left;  obj = b.Right; }
-					else if (IsNullConstant(b.Right)) { cnt = b.Right; obj = b.Left;  }
-
-					if (cnt != null)
+				if (cnt != null)
+				{
+					var objContext = GetContext(context, obj);
+					if (objContext != null && objContext.IsExpression(obj, 0, RequestFor.Object).Result)
 					{
-						var objContext = GetContext(context, obj);
-						if (objContext != null && objContext.IsExpression(obj, 0, RequestFor.Object).Result)
+						var sql = objContext.ConvertToSql(obj, 0, ConvertFlags.Key);
+						if (sql.Length == 0)
+							sql = objContext.ConvertToSql(obj, 0, ConvertFlags.All);
+
+						if (sql.Length > 0)
 						{
-							var sql = objContext.ConvertToSql(obj, 0, ConvertFlags.Key);
-							if (sql.Length == 0)
-								sql = objContext.ConvertToSql(obj, 0, ConvertFlags.All);
-
-							if (sql.Length > 0)
+							Expression predicate = null;
+							foreach (var f in sql)
 							{
-								Expression predicate = null;
-								foreach (var f in sql)
-								{
-									if (f.Sql is SqlField field && field.Table.All == field)
-										continue;
+								if (f.Sql is SqlField field && field.Table.All == field)
+									continue;
 
-									var valueType = f.Sql.SystemType;
+								var valueType = f.Sql.SystemType;
 
-									if (!valueType.IsNullable() && valueType.IsValueTypeEx())
-										valueType = typeof(Nullable<>).MakeGenericType(valueType);
+								if (!valueType.IsNullable() && valueType.IsValueTypeEx())
+									valueType = typeof(Nullable<>).MakeGenericType(valueType);
 
-									var reader     = BuildSql(context, f.Sql, valueType, null);
-									var comparison = Expression.MakeBinary(e.NodeType,
-										Expression.Default(valueType), reader);
+								var reader = BuildSql(context, f.Sql, valueType, null);
+								var comparison = Expression.MakeBinary(cond.Test.NodeType,
+									Expression.Default(valueType), reader);
 
-									predicate = predicate == null
-										? comparison
-										: Expression.MakeBinary(
-											e.NodeType == ExpressionType.Equal
-												? ExpressionType.AndAlso
-												: ExpressionType.OrElse, predicate, comparison);
-								}
-
-								if (predicate != null)
-									return predicate;
+								predicate = predicate == null
+									? comparison
+									: Expression.MakeBinary(
+										cond.Test.NodeType == ExpressionType.Equal
+											? ExpressionType.AndAlso
+											: ExpressionType.OrElse, predicate, comparison);
 							}
+
+							if (predicate != null)
+								cond = cond.Update(predicate,
+									CorrectConditional(context, cond.IfTrue,  enforceServerSide, alias),
+									CorrectConditional(context, cond.IfFalse, enforceServerSide, alias));
 						}
 					}
 				}
+			}
 
-				return e;
-			});
-			return result;
+			if (cond == expr)
+				expr = BuildExpression(context, expr, enforceServerSide, alias);
+			else
+				expr = cond;
+
+			return expr;
 		}
 
 		static bool IsMultipleQuery(MethodCallExpression ce)
@@ -594,6 +638,32 @@ namespace LinqToDB.Linq.Builder
 
 						var attr = GetExpressionAttribute(pi.Method);
 						return attr != null && (attr.PreferServerSide || enforceServerSide) && !CanBeCompiled(expr);
+					}
+				default:
+					{
+						if (expr is BinaryExpression binary)
+						{
+							var l = Expressions.ConvertBinary(MappingSchema, binary);
+							if (l != null)
+							{
+								var body = l.Body.Unwrap();
+								var newExpr = body.Transform(wpi =>
+								{
+									if (wpi.NodeType == ExpressionType.Parameter)
+									{
+										if (l.Parameters[0] == wpi)
+											return binary.Left;
+										if (l.Parameters[1] == wpi)
+											return binary.Right;
+									}
+
+									return wpi;
+								});
+
+								return PreferServerSide(newExpr, enforceServerSide);
+							}
+						}
+						break;
 					}
 			}
 

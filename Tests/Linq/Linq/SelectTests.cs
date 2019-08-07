@@ -609,7 +609,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Ignore("Not currently supported")]
+		[Test, ActiveIssue("Not currently supported")]
 		public void SelectComplexField()
 		{
 			using (var db = new TestDataConnection())
@@ -816,7 +816,6 @@ namespace Tests.Linq
 			}
 		}
 
-		[ActiveIssue(1202)]
 		[Test, Parallelizable(ParallelScope.None)]
 		public void SelectReverseNullPropagationTest([DataSources] string context)
 		{
@@ -838,7 +837,6 @@ namespace Tests.Linq
 			}
 		}
 
-		[ActiveIssue(1202)]
 		[Test, Parallelizable(ParallelScope.None)]
 		public void SelectReverseNullPropagationWhereTest([DataSources] string context)
 		{
@@ -871,7 +869,6 @@ namespace Tests.Linq
 			}
 		}
 
-		[ActiveIssue(1202)]
 		[Test]
 		public void SelectReverseNullPropagationTest2([DataSources] string context)
 		{
@@ -1016,7 +1013,58 @@ namespace Tests.Linq
 
 
 		[Test]
-		public void TestCoalesceInProjection([IncludeDataSources(true, TestProvName.AllSQLite)] string context)
+		public void TestConditionalInProjection([IncludeDataSources(true, TestProvName.AllSQLite)] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (new AllowMultipleQuery())
+			using (db.CreateLocalTable(new []
+			{
+				new MainEntityObject{Id = 1, MainValue = "MainValue 1"}, 
+				new MainEntityObject{Id = 2, MainValue = "MainValue 2"}, 
+			}))
+			using (db.CreateLocalTable(new []
+			{
+				new ChildEntityObject{Id = 1, Value = "Value 1"}
+			}))
+			{
+				var query =
+					from m in db.GetTable<MainEntityObject>()
+					from c in db.GetTable<ChildEntityObject>().LeftJoin(c => c.Id == m.Id)
+					select new
+					{
+						Child1 = c,
+						Child2 = c == null ? null : new ChildEntityObject { Id = c.Id, Value = c.Value },
+						Child3 = c != null ? c : new ChildEntityObject { Id = 4, Value = "Generated" },
+						Child4 = c.Value != "Value 1" ? c : null,
+						SubChild = c == null
+							? db.GetTable<ChildEntityObject>()
+								.Select(sc => new ChildEntityObject
+									{ Id = sc.Id, Value = sc != null ? sc.Value : "NeverHappen" }).FirstOrDefault()
+							: c
+					};
+
+				var result = query.ToArray();
+
+				Assert.NotNull(result[0].Child1);
+				Assert.IsNull (result[1].Child1);
+
+				Assert.NotNull(result[0].Child2);
+				Assert.AreEqual(1,         result[0].Child2.Id);
+				Assert.AreEqual("Value 1", result[0].Child2.Value);
+				Assert.Null(result[1].Child2);
+
+				Assert.NotNull(result[0].Child3);
+				Assert.NotNull(result[1].Child3);
+				Assert.AreEqual(4,           result[1].Child3.Id);
+				Assert.AreEqual("Generated", result[1].Child3.Value);
+
+				Assert.Null(result[0].Child4);
+				Assert.IsNull(result[1].Child4);
+			}
+		}
+
+		[Test]
+		public void TestConditionalInProjectionSubquery([IncludeDataSources(true, TestProvName.AllSQLite)] string context)
 		{
 			using (var db = GetDataContext(context))
 			using (db.CreateLocalTable(new []
@@ -1030,37 +1078,191 @@ namespace Tests.Linq
 			}))
 			{
 				var query = 
-					from m in db.GetTable<MainEntityObject>()
+					(from m in db.GetTable<MainEntityObject>()
 					from c in db.GetTable<ChildEntityObject>().LeftJoin(c => c.Id == m.Id)
 					select new 
 					{
-						Child1 = c,
-						Child2 = c == null ? null : new ChildEntityObject{Id = c.Id, Value = c.Value},
-						Child3 = c != null ? c    : new ChildEntityObject{Id = 4, Value = "Generated"},
-						Child4 = c.Value != "Value 1" ? c : null,
-					};
+						c.Id,
+						Value = (c != null) ? c.Value : (m.MainValue != null ? m.MainValue : "")
+					}).Distinct();
 
-				var result = query.ToArray();
+				var query2 = from q in query
+					where q.Id % 2 == 0
+					select q;
 
-				Assert.NotNull(result[0].Child1);
-				Assert.NotNull(result[1].Child1);
+				var result = query2.ToArray();
 
-				Assert.NotNull(result[0].Child2);
-				Assert.AreEqual(1,         result[0].Child2.Id);
-				Assert.AreEqual("Value 1", result[0].Child2.Value);
-				Assert.Null(result[1].Child2);
-
-				Assert.NotNull(result[0].Child3);
-				Assert.NotNull(result[1].Child3);
-				Assert.AreEqual(4,           result[1].Child3.Id);
-				Assert.AreEqual("Generated", result[1].Child3.Value);
-
-				Assert.Null(result[0].Child4);
-				Assert.NotNull(result[1].Child4);
-				Assert.AreEqual(0,    result[1].Child4.Id);
-				Assert.AreEqual(null, result[1].Child4.Value);
 			}
 		}
 
+		[Test]
+		public void TestConditionalRecursive([IncludeDataSources(ProviderName.SqlCe, TestProvName.AllSqlServer2008Plus)] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var query =
+					from p in db.Parent
+					from c in db.Child.Take(1).DefaultIfEmpty()
+					select new
+					{
+						a = p.ParentID == 1 ? c != null ? "1" : "2" : "3"
+					};
+
+				_ = query.ToList();
+			}
+		}
+
+
+		[Test]
+		[ActiveIssue(Configuration = ProviderName.Informix, Details = "Informix needs type hint for NULL value")]
+		public void Select_TernaryNullableValue([DataSources] string context, [Values(null, 0, 1)] int? value)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var result = db.Select(() => Sql.AsSql(value) == null ? (int?)null : Sql.AsSql(value.Value));
+
+				Assert.AreEqual(value, result);
+			}
+		}
+
+		[Test]
+		[ActiveIssue(Configuration = ProviderName.Informix, Details = "Informix needs type hint for NULL value")]
+		public void Select_TernaryNullableValueReversed([DataSources] string context, [Values(null, 0, 1)] int? value)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var result = db.Select(() => Sql.AsSql(value) != null ? Sql.AsSql(value.Value) : (int?)null);
+
+				Assert.AreEqual(value, result);
+			}
+		}
+
+		[Test]
+		[ActiveIssue(Configuration = ProviderName.Informix, Details = "Informix needs type hint for NULL value")]
+		public void Select_TernaryNullableValue_Nested([DataSources] string context, [Values(null, 0, 1)] int? value)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var result = db.Select(() => Sql.AsSql(value) == null ? (int?)null : (Sql.AsSql(value.Value) < 2 ? Sql.AsSql(value.Value) : 2 + Sql.AsSql(value.Value)));
+
+				Assert.AreEqual(value, result);
+			}
+		}
+
+		[Test]
+		[ActiveIssue(Configuration = ProviderName.Informix, Details = "Informix needs type hint for NULL value")]
+		public void Select_TernaryNullableValueReversed_Nested([DataSources] string context, [Values(null, 0, 1)] int? value)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var result = db.Select(() => Sql.AsSql(value) != null ? (Sql.AsSql(value.Value) < 2 ? Sql.AsSql(value.Value) : Sql.AsSql(value.Value) + 4) : (int?)null);
+
+				Assert.AreEqual(value, result);
+			}
+		}
+
+		[Table("Parent")]
+		public class Parent1788
+		{
+			[Column]
+			public int Value1 { get; }
+		}
+
+		//https://github.com/linq2db/linq2db/issues/1788
+		[ActiveIssue(1788)]
+		[Test]
+		public void Issue1788Test1([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var results = from p in db.GetTable<Parent1788>()
+							   select new
+							   {
+								   f1 = Sql.ToNullable(p.Value1).HasValue,
+								   f2 = Sql.ToNullable(p.Value1)
+							   };
+
+				AreEqual(
+					from p in db.Parent.AsEnumerable()
+					select new
+					{
+						f1 = p.Value1.HasValue,
+						f2 = p.Value1
+					},
+					results);
+			}
+		}
+
+		[ActiveIssue(1788)]
+		[Test]
+		public void Issue1788Test2([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var results = from p in db.GetTable<Parent1788>()
+							  select new
+							  {
+								  f1 = Sql.ToNullable(p.Value1) != null,
+								  f2 = Sql.ToNullable(p.Value1)
+							  };
+
+				AreEqual(
+					from p in db.Parent.AsEnumerable()
+					select new
+					{
+						f1 = p.Value1 != null,
+						f2 = p.Value1
+					},
+					results);
+			}
+		}
+
+		[Test]
+		public void Issue1788Test3([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var results = from p in db.GetTable<Parent1788>()
+							  select new
+							  {
+#pragma warning disable 472
+								  f1 = ((int?)p.Value1) != null,
+#pragma warning restore 472
+								  f2 = (int?)p.Value1
+							  };
+
+				AreEqual(
+					from p in db.Parent.AsEnumerable()
+					select new
+					{
+						f1 = p.Value1 != null,
+						f2 = p.Value1
+					},
+					results);
+			}
+		}
+
+		[Test]
+		public void Issue1788Test4([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var results = from p in db.GetTable<Parent1788>()
+							  select new
+							  {
+								  f1 = ((int?)p.Value1).HasValue,
+								  f2 = (int?)p.Value1
+							  };
+
+				AreEqual(
+					from p in db.Parent.AsEnumerable()
+					select new
+					{
+						f1 = p.Value1 != null,
+						f2 = p.Value1
+					},
+					results);
+			}
+		}
 	}
 }

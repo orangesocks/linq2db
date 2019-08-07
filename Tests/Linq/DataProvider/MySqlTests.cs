@@ -337,7 +337,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Test, Ignore("It works too long.")]
+		[Test, Explicit("It works too long.")]
 		public void BulkCopyMultipleRows([IncludeDataSources(TestProvName.AllMySql)] string context)
 		{
 			BulkCopyTest(context, BulkCopyType.MultipleRows);
@@ -349,7 +349,7 @@ namespace Tests.DataProvider
 			BulkCopyRetrieveSequence(context, BulkCopyType.MultipleRows);
 		}
 
-		[Test, Ignore("It works too long.")]
+		[Test, Explicit("It works too long.")]
 		public void BulkCopyProviderSpecific([IncludeDataSources(TestProvName.AllMySql)] string context)
 		{
 			BulkCopyTest(context, BulkCopyType.ProviderSpecific);
@@ -457,11 +457,6 @@ namespace Tests.DataProvider
 		[Test]
 		public void SchemaProviderTest([IncludeDataSources(TestProvName.AllMySql)] string context)
 		{
-			// MySqlConnector does not currently support GetSchema("Table")
-			// https://github.com/mysql-net/MySqlConnector/issues/375
-			if (context == ProviderName.MySqlConnector)
-				return;
-
 			using (var db = (DataConnection)GetDataContext(context))
 			{
 				var sp = db.DataProvider.GetSchemaProvider();
@@ -654,7 +649,7 @@ namespace Tests.DataProvider
 
 		[Test]
 		public void ProceduresSchemaProviderTest(
-			[IncludeDataSources(TestProvName.AllMySqlData)] string context,
+			[IncludeDataSources(TestProvName.AllMySql)] string context,
 			[ValueSource(nameof(ProcedureTestCases))] ProcedureSchema expectedProc)
 		{
 			// TODO: add aggregate/udf functions test cases
@@ -764,8 +759,7 @@ namespace Tests.DataProvider
 					foreach (var table in procedure.SimilarTables)
 					{
 						var tbl = expectedProc.SimilarTables
-							.Where(_ => _.TableName.ToLower() == table.TableName.ToLower())
-							.SingleOrDefault();
+							.SingleOrDefault(_ => _.TableName.ToLower() == table.TableName.ToLower());
 
 						Assert.IsNotNull(tbl);
 					}
@@ -774,12 +768,12 @@ namespace Tests.DataProvider
 		}
 
 		[Test]
-		public void FullTextIndexTest([IncludeDataSources(TestProvName.AllMySqlData)] string context)
+		public void FullTextIndexTest([IncludeDataSources(TestProvName.AllMySql)] string context)
 		{
 			using (var db = (DataConnection)GetDataContext(context))
 			{
 				DatabaseSchema schema = db.DataProvider.GetSchemaProvider().GetSchema(db, TestUtils.GetDefaultSchemaOptions(context));
-				var res = schema.Tables.Where(c => c.ID.Contains("fulltextindex")).FirstOrDefault();
+				var res = schema.Tables.FirstOrDefault(c => c.ID.ToLower().Contains("fulltextindex"));
 				Assert.AreNotEqual(null, res);
 			}
 		}

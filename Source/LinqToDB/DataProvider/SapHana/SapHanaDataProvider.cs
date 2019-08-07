@@ -38,9 +38,9 @@ namespace LinqToDB.DataProvider.SapHana
 			//testing
 
 			//not supported flags
-			SqlProviderFlags.IsSubQueryTakeSupported   = false;
-			SqlProviderFlags.IsApplyJoinSupported      = false;
-			SqlProviderFlags.IsInsertOrUpdateSupported = false;
+			SqlProviderFlags.IsSubQueryTakeSupported     = false;
+			SqlProviderFlags.IsApplyJoinSupported        = false;
+			SqlProviderFlags.IsInsertOrUpdateSupported   = false;
 
 			_sqlOptimizer = new SapHanaSqlOptimizer(SqlProviderFlags);
 		}
@@ -53,10 +53,10 @@ namespace LinqToDB.DataProvider.SapHana
 		public override string DbFactoryProviderName => "Sap.Data.Hana";
 #endif
 
-		static Action<IDbDataParameter> _setText;
-		static Action<IDbDataParameter> _setNText;
-		static Action<IDbDataParameter> _setBlob;
-		static Action<IDbDataParameter> _setVarBinary;
+		Action<IDbDataParameter> _setText;
+		Action<IDbDataParameter> _setNText;
+		Action<IDbDataParameter> _setBlob;
+		Action<IDbDataParameter> _setVarBinary;
 
 		protected override void OnConnectionTypeCreated(Type connectionType)
 		{
@@ -76,9 +76,9 @@ namespace LinqToDB.DataProvider.SapHana
 		}
 #endif
 
-		public override ISqlBuilder CreateSqlBuilder()
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
 		{
-			return new SapHanaSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			return new SapHanaSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, mappingSchema.ValueToSqlConverter);
 		}
 
 		readonly ISqlOptimizer _sqlOptimizer;
@@ -156,6 +156,12 @@ namespace LinqToDB.DataProvider.SapHana
 			IMergeable<TTarget, TSource> merge)
 		{
 			return new SapHanaMergeBuilder<TTarget, TSource>(connection, merge);
+		}
+
+		public override bool? IsDBNullAllowed(IDataReader reader, int idx)
+		{
+			// provider fails to set AllowDBNull for some results
+			return true;
 		}
 	}
 }

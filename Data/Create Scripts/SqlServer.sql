@@ -458,6 +458,7 @@ CREATE TABLE AllTypes
 -- SKIP SqlServer.2008 BEGIN
 -- SKIP SqlServer.2012 BEGIN
 -- SKIP SqlServer.2014 BEGIN
+-- SKIP SqlServer.2017 BEGIN
 -- SKIP SqlAzure.2012 BEGIN
 	datetime2DataType        varchar(50)       NULL,
 	datetimeoffsetDataType   varchar(50)       NULL,
@@ -474,6 +475,7 @@ CREATE TABLE AllTypes
 -- SKIP SqlServer.2008 END
 -- SKIP SqlServer.2012 END
 -- SKIP SqlServer.2014 END
+-- SKIP SqlServer.2017 END
 -- SKIP SqlAzure.2012 END
 
 ) ON [PRIMARY]
@@ -655,6 +657,7 @@ GO
 -- SKIP SqlServer.2008 BEGIN
 -- SKIP SqlServer.2012 BEGIN
 -- SKIP SqlServer.2014 BEGIN
+-- SKIP SqlServer.2017 BEGIN
 -- SKIP SqlAzure.2012 BEGIN
 CREATE TABLE LinqDataTypes
 (
@@ -674,6 +677,7 @@ GO
 -- SKIP SqlAzure.2012 END
 -- SKIP SqlServer.2012 END
 -- SKIP SqlServer.2014 END
+-- SKIP SqlServer.2017 END
 -- SKIP SqlServer.2008 END
 
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('TestIdentity') AND type in (N'U'))
@@ -1052,3 +1056,64 @@ BEGIN
 	SELECT 1
 END
 GO
+
+
+-- PersonSearch
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'PersonSearch')
+BEGIN DROP Procedure PersonSearch END
+GO
+CREATE PROCEDURE PersonSearch
+	@nameFilter	nvarchar(512)
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+	Create Table #PeopleIds (
+		PersonID int
+	);
+	INSERT INTO #PeopleIds 
+	SELECT Person.PersonID 
+	FROM Person
+	WHERE LOWER(FirstName) like '%' + @nameFilter + '%'
+	OR LOWER(LastName) like '%' + @nameFilter + '%';
+	
+	-- 0: List of matching person ids.
+	SELECT PersonID FROM #PeopleIds;
+
+	-- 1: List of matching persons.
+	SELECT * FROM Person WHERE Person.PersonID
+	IN (SELECT PersonID FROM #PeopleIds) ORDER BY LastName;
+
+	-- 2: List of matching patients.
+	SELECT * FROM Patient WHERE Patient.PersonID
+	IN (SELECT PersonID FROM #PeopleIds);
+
+	-- 3: Is doctor in the results.
+	SELECT 
+	CASE WHEN COUNT(*) >= 1 THEN
+		CAST (1 as BIT)
+	ELSE
+		CAST (0 as BIT)
+	END
+	FROM Doctor 
+	WHERE Doctor.PersonID
+	IN (SELECT PersonID FROM #PeopleIds);
+	
+	-- 4: List of matching persons again.
+	SELECT * FROM Person WHERE Person.PersonID
+	IN (SELECT PersonID FROM #PeopleIds) ORDER BY LastName;
+	
+	-- 5: Number of matched people.
+	SELECT COUNT(*) FROM #PeopleIds;
+
+	-- 6: First matched person.
+	SELECT TOP 1 * FROM Person WHERE Person.PersonID
+	IN (SELECT PersonID FROM #PeopleIds) ORDER BY LastName;
+
+	Drop Table #PeopleIds;
+END
+GO
+
+

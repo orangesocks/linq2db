@@ -27,14 +27,15 @@ namespace LinqToDB.DataProvider.Access
 		protected AccessDataProvider(string name, MappingSchema mappingSchema)
 			: base(name, mappingSchema)
 		{
-			SqlProviderFlags.AcceptsTakeAsParameter      = false;
-			SqlProviderFlags.IsSkipSupported             = false;
-			SqlProviderFlags.IsCountSubQuerySupported    = false;
-			SqlProviderFlags.IsInsertOrUpdateSupported   = false;
-			SqlProviderFlags.TakeHintsSupported          = TakeHints.Percent;
-			SqlProviderFlags.IsCrossJoinSupported        = false;
-			SqlProviderFlags.IsInnerJoinAsCrossSupported = false;
-			SqlProviderFlags.IsDistinctOrderBySupported  = false;
+			SqlProviderFlags.AcceptsTakeAsParameter           = false;
+			SqlProviderFlags.IsSkipSupported                  = false;
+			SqlProviderFlags.IsCountSubQuerySupported         = false;
+			SqlProviderFlags.IsInsertOrUpdateSupported        = false;
+			SqlProviderFlags.TakeHintsSupported               = TakeHints.Percent;
+			SqlProviderFlags.IsCrossJoinSupported             = false;
+			SqlProviderFlags.IsInnerJoinAsCrossSupported      = false;
+			SqlProviderFlags.IsDistinctOrderBySupported       = false;
+			SqlProviderFlags.IsDistinctSetOperationsSupported = false;
 
 			SetCharField("DBTYPE_WCHAR", (r,i) => r.GetString(i).TrimEnd(' '));
 			SetCharFieldToType<char>("DBTYPE_WCHAR", (r, i) => DataTools.GetChar(r, i));
@@ -66,9 +67,9 @@ namespace LinqToDB.DataProvider.Access
 			return new OleDbConnection(connectionString);
 		}
 
-		public override ISqlBuilder CreateSqlBuilder()
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
 		{
-			return new AccessSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			return new AccessSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, mappingSchema.ValueToSqlConverter);
 		}
 
 		readonly ISqlOptimizer _sqlOptimizer;

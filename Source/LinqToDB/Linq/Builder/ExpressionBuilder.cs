@@ -39,7 +39,9 @@ namespace LinqToDB.Linq.Builder
 			new DistinctBuilder            (),
 			new FirstSingleBuilder         (),
 			new AggregationBuilder         (),
+			new MethodChainBuilder         (),
 			new ScalarSelectBuilder        (),
+			new SelectQueryBuilder         (),
 			new CountBuilder               (),
 			new PassThroughBuilder         (),
 			new TableAttributeBuilder      (),
@@ -52,8 +54,7 @@ namespace LinqToDB.Linq.Builder
 			new DeleteBuilder              (),
 			new ContainsBuilder            (),
 			new AllAnyBuilder              (),
-			new ConcatUnionBuilder         (),
-			new IntersectBuilder           (),
+			new SetOperationBuilder        (),
 			new CastBuilder                (),
 			new OfTypeBuilder              (),
 			new AsUpdatableBuilder         (),
@@ -64,7 +65,9 @@ namespace LinqToDB.Linq.Builder
 			new WithTableExpressionBuilder (),
 			new ContextParser              (),
 			new MergeContextParser         (),
-			new ArrayBuilder               ()
+			new ArrayBuilder               (),
+			new AsSubQueryBuilder          (),
+			new HasUniqueKeyBuilder        (),
 		};
 
 		public static void AddBuilder(ISequenceBuilder builder)
@@ -513,6 +516,13 @@ namespace LinqToDB.Linq.Builder
 					case ExpressionType.MemberAccess:
 						{
 							var me = (MemberExpression)expr;
+
+							if (me.Member.IsNullableHasValueMember())
+							{
+								var obj = ExposeExpression(me.Expression);
+								return Expression.NotEqual(obj, Expression.Constant(null, obj.Type));
+							}
+
 							var l  = ConvertMethodExpression(me.Expression?.Type ?? me.Member.ReflectedTypeEx(), me.Member);
 
 							if (l != null)

@@ -35,6 +35,7 @@ namespace LinqToDB.DataProvider.SQLite
 			SqlProviderFlags.IsCommonTableExpressionsSupported = true;
 			SqlProviderFlags.IsDistinctOrderBySupported        = true;
 			SqlProviderFlags.IsSubQueryOrderBySupported        = true;
+			SqlProviderFlags.IsDistinctSetOperationsSupported  = true;
 
 			SetCharField("char",  (r,i) => r.GetString(i).TrimEnd(' '));
 			SetCharField("nchar", (r,i) => r.GetString(i).TrimEnd(' '));
@@ -72,9 +73,9 @@ namespace LinqToDB.DataProvider.SQLite
 		{
 		}
 
-		public override ISqlBuilder CreateSqlBuilder()
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
 		{
-			return new SQLiteSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			return new SQLiteSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, mappingSchema.ValueToSqlConverter);
 		}
 
 		static class MappingSchemaInstance
@@ -128,7 +129,7 @@ namespace LinqToDB.DataProvider.SQLite
 			base.SetParameterType(parameter, dataType);
 		}
 
-		static Action<string> _createDatabase;
+		Action<string> _createDatabase;
 
 		public void CreateDatabase([JetBrains.Annotations.NotNull] string databaseName, bool deleteIfExists = false)
 		{

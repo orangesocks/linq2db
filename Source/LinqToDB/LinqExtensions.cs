@@ -12,6 +12,7 @@ namespace LinqToDB
 {
 	using Async;
 	using Expressions;
+	using Extensions;
 	using Linq;
 	using Linq.Builder;
 
@@ -266,7 +267,7 @@ namespace LinqToDB
 				read = true;
 				item = r;
 				return false;
-			});
+			}).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
 			if (read)
 				return item;
@@ -318,9 +319,9 @@ namespace LinqToDB
 				currentSource.Expression);
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _deleteMethodInfo2 = MemberHelper.MethodOf(() => Delete<int>(null, null)).GetGenericMethodDefinition();
@@ -372,9 +373,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Quote(predicate) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		#endregion
@@ -439,9 +440,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, ((IQueryable<TTarget>)target).Expression, Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		internal static readonly MethodInfo UpdateMethodInfo2 = MemberHelper.MethodOf(() => Update<int>(null, null)).GetGenericMethodDefinition();
@@ -491,9 +492,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _updateMethodInfo3 = MemberHelper.MethodOf(() => Update<int>(null, null, null)).GetGenericMethodDefinition();
@@ -551,9 +552,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Quote(predicate), Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _updateMethodInfo4 = MemberHelper.MethodOf(() => Update<int>(null)).GetGenericMethodDefinition();
@@ -600,9 +601,9 @@ namespace LinqToDB
 				currentQuery.Expression);
 
 			if (currentQuery is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentQuery.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentQuery.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _updateMethodInfo5 = MemberHelper.MethodOf(()
@@ -665,9 +666,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Quote(target), Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		class Updatable<T> : IUpdatable<T>
@@ -861,7 +862,7 @@ namespace LinqToDB
 				Expression.Call(
 					null,
 					_setMethodInfo5.MakeGenericMethod(typeof(T), typeof(TV)),
-					new[] { currentSource.Expression, Expression.Quote(extract), Expression.Constant(value, typeof(TV)) }));
+					new[] { currentSource.Expression, Expression.Quote(extract), WrapConstant(extract.Body, value) }));
 
 			return new Updatable<T> { Query = query };
 		}
@@ -893,7 +894,7 @@ namespace LinqToDB
 				Expression.Call(
 					null,
 					_setMethodInfo6.MakeGenericMethod(typeof(T), typeof(TV)),
-					new[] { query.Expression, Expression.Quote(extract), Expression.Constant(value, typeof(TV)) }));
+					new[] { query.Expression, Expression.Quote(extract), WrapConstant(extract.Body, value) }));
 
 			return new Updatable<T> { Query = query };
 		}
@@ -955,9 +956,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _insertWithIdentityMethodInfo = MemberHelper.MethodOf(() => InsertWithIdentity<int>(null,null)).GetGenericMethodDefinition();
@@ -1055,9 +1056,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<object>(expr, token);
+				return await query.ExecuteAsync<object>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<object>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<object>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		/// <summary>
@@ -1073,7 +1074,7 @@ namespace LinqToDB
 			[NotNull, InstantHandle] Expression<Func<T>> setter,
 			CancellationToken                            token = default)
 		{
-			return target.DataContext.MappingSchema.ChangeTypeTo<int>(await InsertWithIdentityAsync(target, setter, token));
+			return target.DataContext.MappingSchema.ChangeTypeTo<int>(await InsertWithIdentityAsync(target, setter, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -1089,7 +1090,7 @@ namespace LinqToDB
 			[NotNull, InstantHandle] Expression<Func<T>> setter,
 			CancellationToken                            token = default)
 		{
-			return target.DataContext.MappingSchema.ChangeTypeTo<long>(await InsertWithIdentityAsync(target, setter, token));
+			return target.DataContext.MappingSchema.ChangeTypeTo<long>(await InsertWithIdentityAsync(target, setter, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -1105,7 +1106,7 @@ namespace LinqToDB
 			[NotNull, InstantHandle] Expression<Func<T>> setter,
 			CancellationToken                            token = default)
 		{
-			return target.DataContext.MappingSchema.ChangeTypeTo<decimal>(await InsertWithIdentityAsync(target, setter, token));
+			return target.DataContext.MappingSchema.ChangeTypeTo<decimal>(await InsertWithIdentityAsync(target, setter, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		#region ValueInsertable
@@ -1203,7 +1204,7 @@ namespace LinqToDB
 				Expression.Call(
 					null,
 					_valueMethodInfo2.MakeGenericMethod(typeof(T), typeof(TV)),
-					new[] { query.Expression, Expression.Quote(field), Expression.Constant(value, typeof(TV)) }));
+					new[] { query.Expression, Expression.Quote(field), WrapConstant(field.Body, value) }));
 
 			return new ValueInsertable<T> { Query = q };
 		}
@@ -1270,7 +1271,7 @@ namespace LinqToDB
 				Expression.Call(
 					null,
 					_valueMethodInfo4.MakeGenericMethod(typeof(T), typeof(TV)),
-					new[] { query.Expression, Expression.Quote(field), Expression.Constant(value, typeof(TV)) }));
+					new[] { query.Expression, Expression.Quote(field), WrapConstant(field.Body, value) }));
 
 			return new ValueInsertable<T> { Query = q };
 		}
@@ -1318,9 +1319,9 @@ namespace LinqToDB
 				_insertMethodInfo2.MakeGenericMethod(typeof(T)), currentQueryable.Expression);
 
 			if (currentQueryable is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentQueryable.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentQueryable.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _insertWithIdentityMethodInfo2 = MemberHelper.MethodOf(() => InsertWithIdentity<int>(null)).GetGenericMethodDefinition();
@@ -1402,9 +1403,9 @@ namespace LinqToDB
 				currentQueryable.Expression);
 
 			if (currentQueryable is IQueryProviderAsync query)
-				return await query.ExecuteAsync<object>(expr, token);
+				return await query.ExecuteAsync<object>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentQueryable.Provider.Execute<object>(expr), token);
+			return await TaskEx.Run(() => currentQueryable.Provider.Execute<object>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		/// <summary>
@@ -1418,7 +1419,7 @@ namespace LinqToDB
 			[NotNull] this IValueInsertable<T> source, CancellationToken token = default)
 		{
 			return ((ExpressionQuery<T>)((ValueInsertable<T>)source).Query).DataContext.MappingSchema.ChangeTypeTo<int?>(
-				await InsertWithIdentityAsync(source, token));
+				await InsertWithIdentityAsync(source, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -1432,7 +1433,7 @@ namespace LinqToDB
 			[NotNull] this IValueInsertable<T> source, CancellationToken token = default)
 		{
 			return ((ExpressionQuery<T>)((ValueInsertable<T>)source).Query).DataContext.MappingSchema.ChangeTypeTo<long?>(
-				await InsertWithIdentityAsync(source, token));
+				await InsertWithIdentityAsync(source, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -1446,7 +1447,7 @@ namespace LinqToDB
 			[NotNull] this IValueInsertable<T> source, CancellationToken token = default)
 		{
 			return ((ExpressionQuery<T>)((ValueInsertable<T>)source).Query).DataContext.MappingSchema.ChangeTypeTo<decimal?>(
-				await InsertWithIdentityAsync(source, token));
+				await InsertWithIdentityAsync(source, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		#endregion
@@ -1513,9 +1514,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, ((IQueryable<TTarget>)target).Expression, Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _insertWithIdentityMethodInfo3 =
@@ -1642,9 +1643,9 @@ namespace LinqToDB
 					new[] { currentSource.Expression, ((IQueryable<TTarget>)target).Expression, Expression.Quote(setter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<object>(expr, token);
+				return await query.ExecuteAsync<object>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<object>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<object>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		/// <summary>
@@ -1667,7 +1668,7 @@ namespace LinqToDB
 			var currentSource = (IQueryable<TSource>)(ProcessSourceQueryable?.Invoke(source) ?? source);
 
 			return ((ExpressionQuery<TSource>)currentSource).DataContext.MappingSchema.ChangeTypeTo<int?>(
-				await InsertWithIdentityAsync(currentSource, target, setter, token));
+				await InsertWithIdentityAsync(currentSource, target, setter, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -1690,7 +1691,7 @@ namespace LinqToDB
 			var currentSource = (IQueryable<TSource>)(ProcessSourceQueryable?.Invoke(source) ?? source);
 
 			return ((ExpressionQuery<TSource>)currentSource).DataContext.MappingSchema.ChangeTypeTo<long?>(
-				await InsertWithIdentityAsync(currentSource, target, setter, token));
+				await InsertWithIdentityAsync(currentSource, target, setter, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -1713,12 +1714,21 @@ namespace LinqToDB
 			var currentSource = (IQueryable<TSource>)(ProcessSourceQueryable?.Invoke(source) ?? source);
 
 			return ((ExpressionQuery<TSource>)currentSource).DataContext.MappingSchema.ChangeTypeTo<decimal?>(
-				await InsertWithIdentityAsync(currentSource, target, setter, token));
+				await InsertWithIdentityAsync(currentSource, target, setter, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		class SelectInsertable<T,TT> : ISelectInsertable<T,TT>
 		{
 			public IQueryable<T> Query;
+		}
+
+		static Expression WrapConstant<TV>(Expression body, TV value)
+		{
+			var valueType = ReferenceEquals(null, value) ? body.Unwrap().Type : value.GetType();
+			var result    = (Expression)Expression.Constant(value, valueType);
+			if (result.Type != typeof(TV))
+				result = Expression.Convert(result, typeof(TV));
+			return result;
 		}
 
 		static readonly MethodInfo _intoMethodInfo2 =
@@ -1850,7 +1860,7 @@ namespace LinqToDB
 				Expression.Call(
 					null,
 					_valueMethodInfo7.MakeGenericMethod(typeof(TSource), typeof(TTarget), typeof(TValue)),
-					new[] { query.Expression, Expression.Quote(field), Expression.Constant(value, typeof(TValue)) }));
+					new[] { query.Expression, Expression.Quote(field), WrapConstant(field.Body, value) }));
 
 			return new SelectInsertable<TSource,TTarget> { Query = q };
 		}
@@ -1902,9 +1912,9 @@ namespace LinqToDB
 				_insertMethodInfo4.MakeGenericMethod(typeof(TSource), typeof(TTarget)), currentQueryable.Expression);
 
 			if (currentQueryable is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentQueryable.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentQueryable.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _insertWithIdentityMethodInfo4 =
@@ -1994,9 +2004,9 @@ namespace LinqToDB
 				currentQueryable.Expression);
 
 			if (currentQueryable is IQueryProviderAsync query)
-				return await query.ExecuteAsync<object>(expr, token);
+				return await query.ExecuteAsync<object>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentQueryable.Provider.Execute<object>(expr), token);
+			return await TaskEx.Run(() => currentQueryable.Provider.Execute<object>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		/// <summary>
@@ -2011,7 +2021,7 @@ namespace LinqToDB
 			[NotNull] this ISelectInsertable<TSource,TTarget> source, CancellationToken token = default)
 		{
 			return ((ExpressionQuery<TSource>)((SelectInsertable<TSource,TTarget>)source).Query).DataContext.MappingSchema.ChangeTypeTo<int?>(
-				await InsertWithIdentityAsync(source, token));
+				await InsertWithIdentityAsync(source, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -2026,7 +2036,7 @@ namespace LinqToDB
 			[NotNull] this ISelectInsertable<TSource,TTarget> source, CancellationToken token = default)
 		{
 			return ((ExpressionQuery<TSource>)((SelectInsertable<TSource,TTarget>)source).Query).DataContext.MappingSchema.ChangeTypeTo<long?>(
-				await InsertWithIdentityAsync(source, token));
+				await InsertWithIdentityAsync(source, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		/// <summary>
@@ -2041,7 +2051,7 @@ namespace LinqToDB
 			[NotNull] this ISelectInsertable<TSource,TTarget> source, CancellationToken token = default)
 		{
 			return ((ExpressionQuery<TSource>)((SelectInsertable<TSource,TTarget>)source).Query).DataContext.MappingSchema.ChangeTypeTo<decimal?>(
-				await InsertWithIdentityAsync(source, token));
+				await InsertWithIdentityAsync(source, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext));
 		}
 
 		#endregion
@@ -2116,9 +2126,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Quote(insertSetter), Expression.Quote(onDuplicateKeyUpdateSetter) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _insertOrUpdateMethodInfo2 =
@@ -2201,9 +2211,9 @@ namespace LinqToDB
 				Expression.Quote(keySelector));
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		#endregion
@@ -2283,17 +2293,17 @@ namespace LinqToDB
 			if (throwExceptionIfNotExists)
 			{
 				if (query != null)
-					return await query.ExecuteAsync<int>(expr, token);
+					return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-				return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+				return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 			}
 
 			try
 			{
 				if (query != null)
-					return await query.ExecuteAsync<int>(expr, token);
+					return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-				return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+				return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 			}
 			catch
 			{
@@ -2356,9 +2366,9 @@ namespace LinqToDB
 				new[] { currentSource.Expression, Expression.Constant(resetIdentity) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<int>(expr, token);
+				return await query.ExecuteAsync<int>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<int>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		#endregion
@@ -2534,9 +2544,9 @@ namespace LinqToDB
 					new[] { currentSource.Expression, Expression.Quote(index) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<TSource>(expr, token);
+				return await query.ExecuteAsync<TSource>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<TSource>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<TSource>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		static readonly MethodInfo _elementAtOrDefaultMethodInfo = MemberHelper.MethodOf(() => ElementAtOrDefault<int>(null,null)).GetGenericMethodDefinition();
@@ -2591,9 +2601,9 @@ namespace LinqToDB
 					new[] { currentSource.Expression, Expression.Quote(index) });
 
 			if (currentSource is IQueryProviderAsync query)
-				return await query.ExecuteAsync<TSource>(expr, token);
+				return await query.ExecuteAsync<TSource>(expr, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-			return await TaskEx.Run(() => currentSource.Provider.Execute<TSource>(expr), token);
+			return await TaskEx.Run(() => currentSource.Provider.Execute<TSource>(expr), token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 		}
 
 		#endregion
@@ -3094,6 +3104,124 @@ namespace LinqToDB
 
 		#endregion
 
+		#region AsSubQuery
+
+		/// <summary>
+		/// Defines that sub-query is mandatory for <paramref name="source"/> query.
+		/// </summary>
+		/// <typeparam name="TSource">Source query record type.</typeparam>
+		/// <param name="source">Source data query.</param>
+		/// <returns>Query covered in sub-query.</returns>
+		[Pure]
+		[LinqTunnel]
+		public static IQueryable<TSource> AsSubQuery<TSource>([NotNull] this IQueryable<TSource> source)
+		{
+			if (source == null) throw new ArgumentNullException(nameof(source));
+
+			return source.Provider.CreateQuery<TSource>(
+				Expression.Call(
+					null,
+					MethodHelper.GetMethodInfo(AsSubQuery, source), source.Expression));
+		}
+
+		#endregion
+
+		#region HasUniqueKey
+
+		/// <summary>
+		/// Records unique key for IQueryable. It allows sub-query to be optimized out in LEFT JOIN if columns from sub-query are not used in final projection and predicate.
+		/// </summary>
+		/// <typeparam name="TSource">Source query record type.</typeparam>
+		/// <typeparam name="TKey">Key type.</typeparam>
+		/// <param name="source">Source data query.</param>
+		/// <param name="keySelector">A function to specify which fields are unique.</param>
+		/// <returns>Query covered in sub-query.</returns>
+		[Pure]
+		[LinqTunnel]
+		public static IQueryable<TSource> HasUniqueKey<TSource, TKey>(
+			[NotNull] this IQueryable<TSource>             source,
+			[NotNull]      Expression<Func<TSource, TKey>> keySelector)
+		{
+			if (source      == null) throw new ArgumentNullException(nameof(source));
+			if (keySelector == null) throw new ArgumentNullException(nameof(keySelector));
+
+			return source.Provider.CreateQuery<TSource>(
+				Expression.Call(
+					null,
+					MethodHelper.GetMethodInfo(HasUniqueKey, source, keySelector),
+					source.Expression,
+					Expression.Quote(keySelector) 
+				));
+		}		
+
+		#endregion
+
+		#region Set operators
+
+		static Expression GetSourceExpression<TSource>(IEnumerable<TSource> source)
+		{
+			if (source is IQueryable<TSource> queryable)
+				return queryable.Expression;
+			return Expression.Constant(source, typeof (IEnumerable<TSource>));
+		}
+
+		/// <summary>Concatenates two sequences, similar to <see cref="Queryable.Concat{TSource}"/>.</summary>
+		/// <param name="source1">The first sequence to concatenate.</param>
+		/// <param name="source2">The sequence to concatenate to the first sequence.</param>
+		/// <typeparam name="TSource">The type of the elements of the input sequences.</typeparam>
+		/// <returns>An <see cref="T:System.Linq.IQueryable`1" /> that contains the concatenated elements of the two input sequences.</returns>
+		/// <exception cref="T:System.ArgumentNullException">
+		/// <paramref name="source1" /> or <paramref name="source2" /> is <see langword="null" />.</exception>
+		public static IQueryable<TSource> UnionAll<TSource>(
+			[NotNull] this IQueryable<TSource>  source1,
+			[NotNull]      IEnumerable<TSource> source2)
+		{
+			return source1.Concat(source2);
+		}
+
+		/// <summary>Produces the set difference of two sequences.</summary>
+		/// <param name="source1">An <see cref="T:System.Linq.IQueryable`1" /> whose elements that are not also in <paramref name="source2" /> will be returned.</param>
+		/// <param name="source2">An <see cref="T:System.Collections.Generic.IEnumerable`1" /> whose elements that also occur in the first sequence will not appear in the returned sequence.</param>
+		/// <typeparam name="TSource">The type of the elements of the input sequences.</typeparam>
+		/// <returns>An <see cref="T:System.Linq.IQueryable`1" /> that contains the set difference of the two sequences.</returns>
+		/// <exception cref="T:System.ArgumentNullException">
+		/// <paramref name="source1" /> or <paramref name="source2" /> is <see langword="null" />.</exception>
+		public static IQueryable<TSource> ExceptAll<TSource>(
+			[NotNull] this IQueryable<TSource>  source1,
+			[NotNull]      IEnumerable<TSource> source2)
+		{
+			if (source1 == null) throw new ArgumentNullException(nameof(source1));
+			if (source2 == null) throw new ArgumentNullException(nameof(source2));
+
+			return source1.Provider.CreateQuery<TSource>(
+				Expression.Call(null, MethodHelper.GetMethodInfo(ExceptAll, source1, source2),
+					source1.Expression,
+					GetSourceExpression(source2)
+				));
+		}
+
+		/// <summary>Produces the set intersection of two sequences.</summary>
+		/// <param name="source1">A sequence whose elements that also appear in <paramref name="source2" /> are returned.</param>
+		/// <param name="source2">A sequence whose elements that also appear in the first sequence are returned.</param>
+		/// <typeparam name="TSource">The type of the elements of the input sequences.</typeparam>
+		/// <returns>A sequence that contains the set intersection of the two sequences.</returns>
+		/// <exception cref="T:System.ArgumentNullException">
+		/// <paramref name="source1" /> or <paramref name="source2" /> is <see langword="null" />.</exception>
+		public static IQueryable<TSource> IntersectAll<TSource>(
+			[NotNull] this IQueryable<TSource>  source1,
+			[NotNull]      IEnumerable<TSource> source2)
+		{
+			if (source1 == null) throw new ArgumentNullException(nameof(source1));
+			if (source2 == null) throw new ArgumentNullException(nameof(source2));
+
+			return source1.Provider.CreateQuery<TSource>(
+				Expression.Call(null, MethodHelper.GetMethodInfo(IntersectAll, source1, source2),
+					source1.Expression,
+					GetSourceExpression(source2)
+				));
+		}
+
+		#endregion
 
 		#region Tests
 

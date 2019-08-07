@@ -37,9 +37,9 @@ namespace LinqToDB.DataProvider.SapHana
 			//testing
 
 			//not supported flags
-			SqlProviderFlags.IsSubQueryTakeSupported   = false;
-			SqlProviderFlags.IsApplyJoinSupported      = false;
-			SqlProviderFlags.IsInsertOrUpdateSupported = false;
+			SqlProviderFlags.IsSubQueryTakeSupported     = false;
+			SqlProviderFlags.IsApplyJoinSupported        = false;
+			SqlProviderFlags.IsInsertOrUpdateSupported   = false;
 
 			_sqlOptimizer = new SapHanaSqlOptimizer(SqlProviderFlags);
 		}
@@ -62,7 +62,7 @@ namespace LinqToDB.DataProvider.SapHana
 			return new SapHanaOdbcSchemaProvider();
 		}
 
-		public override void InitCommand(DataConnection dataConnection, CommandType commandType, string commandText, DataParameter[] parameters)
+		public override void InitCommand(DataConnection dataConnection, CommandType commandType, string commandText, DataParameter[] parameters, bool withParameters)
 		{
 			if (commandType == CommandType.StoredProcedure)
 			{
@@ -70,12 +70,12 @@ namespace LinqToDB.DataProvider.SapHana
 				commandType = CommandType.Text;
 			}
 
-			base.InitCommand(dataConnection, commandType, commandText, parameters);
+			base.InitCommand(dataConnection, commandType, commandText, parameters, withParameters);
 		}
 
-		public override ISqlBuilder CreateSqlBuilder()
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
 		{
-			return new SapHanaOdbcSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			return new SapHanaOdbcSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, mappingSchema.ValueToSqlConverter);
 		}
 
 		readonly ISqlOptimizer _sqlOptimizer;

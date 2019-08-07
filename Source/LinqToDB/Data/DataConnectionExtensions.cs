@@ -97,7 +97,7 @@ namespace LinqToDB.Data
 		/// <typeparam name="T">Result record type.</typeparam>
 		/// <param name="connection">Database connection.</param>
 		/// <param name="objectReader">Record mapping function from data reader.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Returns collection of query result records.</returns>
 		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, params DataParameter[] parameters)
@@ -354,6 +354,7 @@ namespace LinqToDB.Data
 
 		#endregion
 
+		
 		#region Query
 
 		/// <summary>
@@ -382,16 +383,288 @@ namespace LinqToDB.Data
 		}
 
 		/// <summary>
+		/// Executes command and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns result.</returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static T QueryMultiple<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryMultiple<T>();
+		}
+
+		/// <summary>
+		/// Executes command asynchronously and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryMultipleAsync<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryMultipleAsync<T>();
+		}
+
+		/// <summary>
+		/// Executes command asynchronously and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryMultipleAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryMultipleAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values of specified type.
 		/// </summary>
 		/// <typeparam name="T">Result record type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Returns collection of query result records.</returns>
 		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryProc<T>();
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryProcMultipleAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultipleAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryProcMultipleAsync<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultipleAsync<T>();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns result.</returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static T QueryProcMultiple<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultiple<T>();
 		}
 
 		/// <summary>
@@ -908,7 +1181,7 @@ namespace LinqToDB.Data
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns number of affected records.
 		/// </summary>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Number of records, affected by command execution.</returns>
 		public static int ExecuteProc(this DataConnection connection, string sql, params DataParameter[] parameters)
@@ -1032,7 +1305,7 @@ namespace LinqToDB.Data
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns number of affected records.
 		/// </summary>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Task with number of records, affected by command execution.</returns>
 		public static Task<int> ExecuteProcAsync(this DataConnection connection, string sql, params DataParameter[] parameters)
@@ -1044,7 +1317,7 @@ namespace LinqToDB.Data
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns number of affected records.
 		/// </summary>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Task with number of records, affected by command execution.</returns>
@@ -1122,7 +1395,7 @@ namespace LinqToDB.Data
 		/// </summary>
 		/// <typeparam name="T">Resulting value type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Resulting value.</returns>
 		public static T ExecuteProc<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
@@ -1263,7 +1536,7 @@ namespace LinqToDB.Data
 		/// </summary>
 		/// <typeparam name="T">Resulting value type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Task with resulting value.</returns>
 		public static Task<T> ExecuteProcAsync<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
@@ -1276,7 +1549,7 @@ namespace LinqToDB.Data
 		/// </summary>
 		/// <typeparam name="T">Resulting value type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Resulting value.</returns>

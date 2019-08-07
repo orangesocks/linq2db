@@ -6,12 +6,13 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{885042E3-18EA-4927-B1CF-5E0E3DBD1C00}"
 	ProjectSection(SolutionItems) = preProject
 		Build\AppVeyor.FixVersionNugets.ps1 = Build\AppVeyor.FixVersionNugets.ps1
+		Build\AppVeyor.FixVersionProps.ps1 = Build\AppVeyor.FixVersionProps.ps1
 		Build\AppVeyor.NUnit.Tests.ps1 = Build\AppVeyor.NUnit.Tests.ps1
-		Build\CodeJam.AppVeyor.FixVersionProps.ps1 = Build\CodeJam.AppVeyor.FixVersionProps.ps1
 		Build\linq2db.Default.props = Build\linq2db.Default.props
 		Build\linq2db.Providers.props = Build\linq2db.Providers.props
 		Build\linq2db.snk = Build\linq2db.snk
 		Build\linq2db.Source.props = Build\linq2db.Source.props
+		Build\linq2db.Tests.Playground.props = Build\linq2db.Tests.Playground.props
 		Build\linq2db.Tests.props = Build\linq2db.Tests.props
 	EndProjectSection
 EndProject
@@ -20,6 +21,10 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LinqToDB", "Source\LinqToDB\LinqToDB.csproj", "{0E4E9A56-F285-4067-ADAA-392ACB9CAAA7}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{DF8DE665-05A2-4ACF-9799-8FC35E7F1525}"
+	ProjectSection(SolutionItems) = preProject
+		Tests\DataProviders.json = Tests\DataProviders.json
+		Tests\UserDataProviders.json = Tests\UserDataProviders.json
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tests.Model", "Tests\Model\Tests.Model.csproj", "{EF534F71-A4E6-4019-8835-43BEE792C70A}"
 EndProject
@@ -32,6 +37,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LinqToDB.Templates", "LinqT
 		Source\LinqToDB.Templates\DataAnnotations.ttinclude = Source\LinqToDB.Templates\DataAnnotations.ttinclude
 		Source\LinqToDB.Templates\DataModel.ttinclude = Source\LinqToDB.Templates\DataModel.ttinclude
 		Source\LinqToDB.Templates\EditableObject.ttinclude = Source\LinqToDB.Templates\EditableObject.ttinclude
+		Source\LinqToDB.Templates\Equatable.ttinclude = Source\LinqToDB.Templates\Equatable.ttinclude
 		Source\LinqToDB.Templates\Humanizer.ttinclude = Source\LinqToDB.Templates\Humanizer.ttinclude
 		Source\LinqToDB.Templates\LinqToDB.Access.ttinclude = Source\LinqToDB.Templates\LinqToDB.Access.ttinclude
 		Source\LinqToDB.Templates\LinqToDB.DB2.ttinclude = Source\LinqToDB.Templates\LinqToDB.DB2.ttinclude
@@ -60,12 +66,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".root", ".root", "{6278F811-C5AA-4C35-B996-AA5913F41A0D}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		.gitattributes = .gitattributes
 		.travis.yml = .travis.yml
 		appveyor.yml = appveyor.yml
-		build.cake = build.cake
 		Build.cmd = Build.cmd
-		build.ps1 = build.ps1
-		build.sh = build.sh
 		Clean.cmd = Clean.cmd
 		CONTRIBUTING.md = CONTRIBUTING.md
 		.github\ISSUE_TEMPLATE.md = .github\ISSUE_TEMPLATE.md
@@ -97,6 +101,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NuGet", "NuGet", "{3A081B6E
 		NuGet\linq2db.Sybase.DataAction.nuspec = NuGet\linq2db.Sybase.DataAction.nuspec
 		NuGet\linq2db.Sybase.nuspec = NuGet\linq2db.Sybase.nuspec
 		NuGet\linq2db.t4models.nuspec = NuGet\linq2db.t4models.nuspec
+		NuGet\linq2db.Tools.nuspec = NuGet\linq2db.Tools.nuspec
 		NuGet\Pack.bat = NuGet\Pack.bat
 		NuGet\PackAV.bat = NuGet\PackAV.bat
 		NuGet\PackLocal.cmd = NuGet\PackLocal.cmd
@@ -240,11 +245,14 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "MySqlConnector", "MySqlConnector", "{B4080869-A89C-4996-938C-D7F42E9AA3CB}"
 	ProjectSection(SolutionItems) = preProject
 		NuGet\MySqlConnector\CopyMe.MySqlConnector.tt.txt = NuGet\MySqlConnector\CopyMe.MySqlConnector.tt.txt
+		NuGet\linq2db.MySqlConnector.nuspec = NuGet\linq2db.MySqlConnector.nuspec
 		NuGet\MySqlConnector\linq2db.MySqlConnector.props = NuGet\MySqlConnector\linq2db.MySqlConnector.props
 		NuGet\MySqlConnector\LinqToDB.MySqlConnector.Tools.ttinclude = NuGet\MySqlConnector\LinqToDB.MySqlConnector.Tools.ttinclude
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LinqToDB.Tools", "Source\LinqToDB.Tools\LinqToDB.Tools.csproj", "{B6D0309F-61AA-4F2B-B918-5446609CBECD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LinqToDB.Tools", "Source\LinqToDB.Tools\LinqToDB.Tools.csproj", "{B6D0309F-61AA-4F2B-B918-5446609CBECD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests.Android", "Tests\Tests.Android\Tests.Android.csproj", "{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -350,6 +358,16 @@ Global
 		{B6D0309F-61AA-4F2B-B918-5446609CBECD}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B6D0309F-61AA-4F2B-B918-5446609CBECD}.Travis|Any CPU.ActiveCfg = Release|Any CPU
 		{B6D0309F-61AA-4F2B-B918-5446609CBECD}.Travis|Any CPU.Build.0 = Release|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.AppVeyor|Any CPU.ActiveCfg = Release|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Travis|Any CPU.ActiveCfg = Release|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Travis|Any CPU.Build.0 = Release|Any CPU
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA}.Travis|Any CPU.Deploy.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -383,6 +401,7 @@ Global
 		{4E3D4705-F037-4536-A45D-7AF52BB017DC} = {DF8DE665-05A2-4ACF-9799-8FC35E7F1525}
 		{B4080869-A89C-4996-938C-D7F42E9AA3CB} = {3A081B6E-D3B3-433F-A3CA-EE29CD24C324}
 		{B6D0309F-61AA-4F2B-B918-5446609CBECD} = {AF93451E-198C-4A94-8EB4-C330D886E102}
+		{AD7B78B0-AE51-4FB7-9B11-4E22A2B538CA} = {DF8DE665-05A2-4ACF-9799-8FC35E7F1525}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {15BBD7CE-1C8E-4407-9DCF-674982CEB3F7}

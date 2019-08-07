@@ -1326,5 +1326,69 @@ namespace Tests.DataProvider
 			}
 		}
 #endif
+		[Table("Issue1613")]
+		private class Issue1613Table
+		{
+			[Column("dt"), Nullable] 
+			public DateTimeOffset? DateTimeOffset { get; set; }
+		}
+
+		private static Issue1613Table[] GenerateData()
+		{
+			var sampleData = new[]
+			{
+				new Issue1613Table { DateTimeOffset = DateTimeOffset.Now },
+				new Issue1613Table { DateTimeOffset = DateTimeOffset.Now.AddDays(1) },
+				new Issue1613Table { DateTimeOffset = DateTimeOffset.Now.AddDays(2) },
+				new Issue1613Table { DateTimeOffset = DateTimeOffset.Now.AddDays(3) },
+				new Issue1613Table { DateTimeOffset = DateTimeOffset.Now.AddDays(4) }
+			};
+			return sampleData;
+		}
+
+		[Test]
+		public void Issue1613Test1([IncludeDataSources(true, TestProvName.AllSqlServer2008Plus)] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (var table = db.CreateLocalTable(GenerateData()))
+			{ 
+
+				var query1 = table.GroupBy(x => x.DateTimeOffset).Select(g => g.Key).ToList();
+				var query2 = table.Select(r => r.DateTimeOffset).ToList();
+
+				Assert.AreEqual(5, query1.Count);
+				Assert.AreEqual(5, query2.Count);
+				Assert.AreEqual(query1, query2);
+			}
+		}
+		
+		[Test]
+		public void Issue1613Test2([IncludeDataSources(true, TestProvName.AllSqlServer2008Plus)] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (var table = db.CreateLocalTable(GenerateData()))
+			{ 
+
+				var query1 = table.GroupBy(x => x.DateTimeOffset.Value.Date).Select(g => g.Key).ToList();
+				var query2 = table.Select(r => r.DateTimeOffset.Value.Date).ToList();
+
+				Assert.AreEqual(5, query1.Count);
+				Assert.AreEqual(5, query2.Count);
+				Assert.AreEqual(query1, query2);
+			}
+		}
+
+		[Test]
+		public void Issue1613Test3([IncludeDataSources(true, TestProvName.AllSqlServer2008Plus)] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (var table = db.CreateLocalTable(GenerateData()))
+			{
+				var query1 = table.GroupBy(x => x.DateTimeOffset.Value.TimeOfDay).Select(g => g.Key).ToList();
+				var query2 = table.Select(r => r.DateTimeOffset.Value.TimeOfDay).Distinct().ToList();
+
+				Assert.AreEqual(query1, query2);
+			}
+		}
 	}
 }

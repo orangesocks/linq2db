@@ -30,6 +30,7 @@ namespace LinqToDB.DataProvider.Firebird
 			SqlProviderFlags.IsIdentityParameterRequired       = true;
 			SqlProviderFlags.IsCommonTableExpressionsSupported = true;
 			SqlProviderFlags.IsSubQueryOrderBySupported        = true;
+			SqlProviderFlags.IsDistinctSetOperationsSupported  = false;
 
 			SetCharField("CHAR", (r,i) => r.GetString(i).TrimEnd(' '));
 			SetCharFieldToType<char>("CHAR", (r, i) => DataTools.GetChar(r, i));
@@ -50,7 +51,7 @@ namespace LinqToDB.DataProvider.Firebird
 			return value;
 		}
 
-		static Action<IDbDataParameter> _setTimeStamp;
+		Action<IDbDataParameter> _setTimeStamp;
 
 		public    override string ConnectionNamespace => "FirebirdSql.Data.FirebirdClient";
 		protected override string ConnectionTypeName  => $"{ConnectionNamespace}.FbConnection, {ConnectionNamespace}";
@@ -62,9 +63,9 @@ namespace LinqToDB.DataProvider.Firebird
 			_setTimeStamp = GetSetParameter(connectionType, "FbParameter",         "FbDbType", "FbDbType", "TimeStamp");
 		}
 
-		public override ISqlBuilder CreateSqlBuilder()
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
 		{
-			return new FirebirdSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			return new FirebirdSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, mappingSchema.ValueToSqlConverter);
 		}
 
 		readonly ISqlOptimizer _sqlOptimizer;

@@ -18,12 +18,12 @@ namespace Tests.Linq
 	{
 		public static string[] CteSupportedProviders = new[]
 		{
-			ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014,
+			TestProvName.AllSqlServer2008Plus,
 			ProviderName.Firebird,
-			ProviderName.PostgreSQL, ProviderName.PostgreSQL92, ProviderName.PostgreSQL93, ProviderName.PostgreSQL95, TestProvName.PostgreSQL10, TestProvName.PostgreSQL11, TestProvName.PostgreSQLLatest,
+			TestProvName.AllPostgreSQL,
 			ProviderName.DB2,
-			ProviderName.SQLite, ProviderName.SQLiteClassic, ProviderName.SQLiteMS,
-			ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative
+			TestProvName.AllSQLite,
+			TestProvName.AllOracle 
 			//ProviderName.Informix,
 			// Will be supported in SQL 8.0 - ProviderName.MySql
 		};
@@ -473,10 +473,24 @@ namespace Tests.Linq
 		}
 
 		[Test]
+		public void TestCondition([CteContextSource(true)] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				int? var3 = 1;
+				var cte = db.GetTable<Child>().AsCte();
+
+				var query = cte.Where(t => t.ChildID == var3 || var3 == null);
+				var str = query.ToString();
+				Assert.That(str.Contains("WITH"), Is.EqualTo(true));
+			}
+		}
+
+		[Test]
 		public void TestInsert([CteContextSource(true, ProviderName.DB2)] string context)
 		{
 			using (var db = GetDataContext(context))
-			using (var testTable = db.CreateLocalTable<CteDMLTests>(context, nameof(TestInsert), "CteChild"))
+			using (var testTable = db.CreateLocalTable<CteDMLTests>("CteChild"))
 			{
 				var cte1 = db.GetTable<Child>().Where(c => c.ParentID > 1).AsCte("CTE1_");
 				var toInsert = from p in cte1
@@ -524,6 +538,7 @@ namespace Tests.Linq
 			}
 		}
 
+		[ActiveIssue(Configuration = TestProvName.AllOracle, Details = "Oracle needs special syntax for CTE + UPDATE")]
 		[Test]
 		public void TestUpdate(
 			[CteContextSource(ProviderName.Firebird, ProviderName.DB2, ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative)]
@@ -685,7 +700,7 @@ namespace Tests.Linq
 			var hierarchyData = GeHirarchyData();
 
 			using (var db = GetDataContext(context))
-			using (var tree = db.CreateLocalTable(context, "19", hierarchyData))
+			using (var tree = db.CreateLocalTable(hierarchyData))
 			{
 				var hierarchy = GetHierarchyDown(tree, db);
 
@@ -702,7 +717,7 @@ namespace Tests.Linq
 			var hierarchyData = GeHirarchyData();
 
 			using (var db = GetDataContext(context))
-			using (var tree = db.CreateLocalTable(context, "20", hierarchyData))
+			using (var tree = db.CreateLocalTable(hierarchyData))
 			{
 				var hierarchy1 = GetHierarchyDown(tree, db);
 				var hierarchy2 = GetHierarchyDown(tree, db);
@@ -727,7 +742,7 @@ namespace Tests.Linq
 			var hierarchyData = GeHirarchyData();
 
 			using (var db = GetDataContext(context))
-			using (var tree = db.CreateLocalTable(context, "21", hierarchyData))
+			using (var tree = db.CreateLocalTable(hierarchyData))
 			{
 				var hierarchy = GetHierarchyDown(tree, db);
 				var expected = EnumerateDown(hierarchyData, 0, null);
@@ -742,8 +757,8 @@ namespace Tests.Linq
 			var hierarchyData = GeHirarchyData();
 
 			using (var db          = GetDataContext(context))
-			using (var tree        = db.CreateLocalTable               (context, "17", hierarchyData))
-			using (var resultTable = db.CreateLocalTable<HierarchyData>(context, "18"))
+			using (var tree        = db.CreateLocalTable(hierarchyData))
+			using (var resultTable = db.CreateLocalTable<HierarchyData>())
 			{
 				var hierarchy = GetHierarchyDown(tree, db);
 				hierarchy.Insert(resultTable, r => r);
@@ -758,8 +773,8 @@ namespace Tests.Linq
 		[Test]
 		public void RecursiveDeepNesting([CteContextSource(true, ProviderName.DB2)] string context)
 		{
-			using (var db = GetDataContext(context))
-			using (var tree = db.CreateLocalTable<HierarchyTree>(context, "22"))
+			using (var db   = GetDataContext(context))
+			using (var tree = db.CreateLocalTable<HierarchyTree>())
 			{
 				var hierarchy = GetHierarchyDown(tree, db);
 

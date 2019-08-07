@@ -33,7 +33,6 @@ namespace LinqToDB.DataProvider.Informix
 			SqlProviderFlags.IsSubQueryOrderBySupported        = true;
 			SqlProviderFlags.IsDistinctOrderBySupported        = false;
 
-
 			SetCharField("CHAR",  (r,i) => r.GetString(i).TrimEnd(' '));
 			SetCharField("NCHAR", (r,i) => r.GetString(i).TrimEnd(' '));
 			SetCharFieldToType<char>("CHAR",  (r, i) => DataTools.GetChar(r, i));
@@ -138,9 +137,9 @@ namespace LinqToDB.DataProvider.Informix
 		public override string DbFactoryProviderName => "IBM.Data.Informix";
 #endif
 
-		public override ISqlBuilder CreateSqlBuilder()
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
 		{
-			return new InformixSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			return new InformixSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, mappingSchema.ValueToSqlConverter);
 		}
 
 		readonly ISqlOptimizer _sqlOptimizer;
@@ -180,7 +179,7 @@ namespace LinqToDB.DataProvider.Informix
 			base.SetParameter(parameter, name, dataType, value);
 		}
 
-		static Action<IDbDataParameter> _setText;
+		Action<IDbDataParameter> _setText;
 
 		protected override void SetParameterType(IDbDataParameter parameter, DbDataType dataType)
 		{

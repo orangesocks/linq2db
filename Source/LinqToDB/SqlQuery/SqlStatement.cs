@@ -83,34 +83,15 @@ namespace LinqToDB.SqlQuery
 					return null;
 				});
 
-				if (statement != this)
-				{
-					statement.Parameters.Clear();
-
-					new QueryVisitor().VisitAll(statement, expr =>
-					{
-						switch (expr.ElementType)
-						{
-							case QueryElementType.SqlParameter :
-								{
-									var p = (SqlParameter)expr;
-									if (p.IsQueryParameter)
-										statement.Parameters.Add(p);
-
-									break;
-								}
-						}
-					});
-				}
-
 				return statement;
 			}
 
 			return this;
 		}
 
-		protected void CollectParameters()
+		public void CollectParameters()
 		{
+			var alreadyAdded = new HashSet<SqlParameter>();
 			Parameters.Clear();
 
 			new QueryVisitor().VisitAll(this, expr =>
@@ -120,7 +101,7 @@ namespace LinqToDB.SqlQuery
 					case QueryElementType.SqlParameter :
 						{
 							var p = (SqlParameter)expr;
-							if (p.IsQueryParameter)
+							if (p.IsQueryParameter && alreadyAdded.Add(p))
 								Parameters.Add(p);
 
 							break;
@@ -385,13 +366,13 @@ namespace LinqToDB.SqlQuery
 									},
 									StringComparer.OrdinalIgnoreCase);
 
-								if (query.HasUnion)
+								if (query.HasSetOperators)
 								{
 									for (var i = 0; i < query.Select.Columns.Count; i++)
 									{
 										var col = query.Select.Columns[i];
 
-										foreach (var t in query.Unions)
+										foreach (var t in query.SetOperators)
 										{
 											var union = t.SelectQuery.Select;
 											union.Columns[i].Alias = col.Alias;

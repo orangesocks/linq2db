@@ -1737,5 +1737,50 @@ namespace Tests.Linq
 				}
 			}
 		}
+
+		[Table]
+		public class Issue1622Table
+		{
+			[PrimaryKey]
+			public int Id { get; set; }
+			[Column]
+			public string SomeText { get; set; }
+		}
+
+		public enum Issue1622Enum
+		{
+			Value1, Value2
+		}
+
+		[Sql.Expression("{0} = {1}", InlineParameters = true, ServerSideOnly = true, IsPredicate = true)]
+		public static bool SomeComparison(string column, Issue1622Enum value) => throw new InvalidOperationException();
+
+		[ActiveIssue(SkipForNonLinqService = true, Details = "Fails due to default mapping schema on remote server. Fixed in 3.0")]
+		[Test]
+		public void Issue1622Test([DataSources] string context)
+		{
+			using (var db = GetDataContext(context, new MappingSchema()))
+			{
+				db.MappingSchema.SetValueToSqlConverter(typeof(Issue1622Enum),
+					(sb, dt, v) =>
+					{
+						sb.Append("'").Append(((Issue1622Enum)v).ToString()).Append("_suffix'");
+					});
+
+				using (var table = db.CreateLocalTable<Issue1622Table>())
+				{
+					var item = new Issue1622Table() { Id = 1, SomeText = "Value1_suffix" };
+					db.Insert(item);
+
+					var res = table.Where(e => SomeComparison(e.SomeText, Issue1622Enum.Value1)).Single();
+					var res2 = table.Where(e => e.Id == 1).Single();
+
+					Assert.That(item.Id, Is.EqualTo(res.Id));
+					Assert.That(item.SomeText, Is.EqualTo(res.SomeText));
+					Assert.That(item.Id, Is.EqualTo(res2.Id));
+					Assert.That(item.SomeText, Is.EqualTo(res2.SomeText));
+				}
+			}
+		}
 	}
 }

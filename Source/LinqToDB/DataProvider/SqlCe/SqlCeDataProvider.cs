@@ -32,6 +32,7 @@ namespace LinqToDB.DataProvider.SqlCe
 			SqlProviderFlags.IsCrossJoinSupported                 = true;
 			SqlProviderFlags.IsDistinctOrderBySupported           = false;
 			SqlProviderFlags.IsOrderByAggregateFunctionsSupported = false;
+			SqlProviderFlags.IsDistinctSetOperationsSupported     = false;
 
 			SetCharFieldToType<char>("NChar", (r, i) => DataTools.GetChar(r, i));
 
@@ -62,16 +63,16 @@ namespace LinqToDB.DataProvider.SqlCe
 			_setBoolean   = GetSetParameter(connectionType, SqlDbType.Bit);
 		}
 
-		static Action<IDbDataParameter> _setNText;
-		static Action<IDbDataParameter> _setNChar;
-		static Action<IDbDataParameter> _setNVarChar;
-		static Action<IDbDataParameter> _setTimestamp;
-		static Action<IDbDataParameter> _setBinary;
-		static Action<IDbDataParameter> _setVarBinary;
-		static Action<IDbDataParameter> _setImage;
-		static Action<IDbDataParameter> _setDateTime;
-		static Action<IDbDataParameter> _setMoney;
-		static Action<IDbDataParameter> _setBoolean;
+		Action<IDbDataParameter> _setNText;
+		Action<IDbDataParameter> _setNChar;
+		Action<IDbDataParameter> _setNVarChar;
+		Action<IDbDataParameter> _setTimestamp;
+		Action<IDbDataParameter> _setBinary;
+		Action<IDbDataParameter> _setVarBinary;
+		Action<IDbDataParameter> _setImage;
+		Action<IDbDataParameter> _setDateTime;
+		Action<IDbDataParameter> _setMoney;
+		Action<IDbDataParameter> _setBoolean;
 
 		static Action<IDbDataParameter> GetSetParameter(Type connectionType, SqlDbType value)
 		{
@@ -91,9 +92,9 @@ namespace LinqToDB.DataProvider.SqlCe
 
 		#region Overrides
 
-		public override ISqlBuilder CreateSqlBuilder()
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
 		{
-			return new SqlCeSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			return new SqlCeSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, mappingSchema.ValueToSqlConverter);
 		}
 
 		readonly ISqlOptimizer _sqlOptimizer;
