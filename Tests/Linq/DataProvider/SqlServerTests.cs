@@ -16,6 +16,7 @@ using LinqToDB.Common;
 using LinqToDB.Data;
 using LinqToDB.DataProvider.SqlServer;
 using LinqToDB.Mapping;
+using LinqToDB.SchemaProvider;
 
 #if !NETSTANDARD1_6
 using Microsoft.SqlServer.Types;
@@ -1390,5 +1391,54 @@ namespace Tests.DataProvider
 				Assert.AreEqual(query1, query2);
 			}
 		}
+
+		public static int Issue1897(DataConnection dataConnection, out int @return)
+		{
+			var ret = dataConnection.ExecuteProc("[Issue1897]",
+				new DataParameter("@return", null, DataType.Int32) { Direction = ParameterDirection.ReturnValue });
+
+			@return = Converter.ChangeTypeTo<int>(((IDbDataParameter)dataConnection.Command.Parameters["@return"]).Value);
+
+			return ret;
+		}
+
+		[Test]
+		public void Issue1897Test([IncludeDataSources(false, TestProvName.AllSqlServer)] string context)
+		{
+			using (var db = (DataConnection)GetDataContext(context))
+			{
+				var rows = Issue1897(db, out var result);
+				Assert.AreEqual(-1, rows);
+				Assert.AreEqual(4, result);
+			}
+		}
+
+#if !NETSTANDARD1_6
+		[Test]
+		public void Issue1921Test([IncludeDataSources(false, TestProvName.AllSqlServer2005Plus)] string context)
+		{
+			using (var db = (DataConnection)GetDataContext(context))
+			{
+				var options = TestUtils.GetDefaultSchemaOptions(context, new GetSchemaOptions());
+				options.GetTables = false;
+
+				var schema = db.DataProvider
+					.GetSchemaProvider()
+					.GetSchema(db, options);
+
+				var proc = schema.Procedures.FirstOrDefault(p => p.ProcedureName == "Issue1921");
+				Assert.NotNull(proc);
+				Assert.AreEqual("Issue1921", proc.ProcedureName);
+				Assert.AreEqual(true       , proc.IsTableFunction);
+				Assert.NotNull(proc.ResultTable);
+				Assert.AreEqual(2          , proc.ResultTable.Columns.Count);
+				Assert.AreEqual("name"     , proc.ResultTable.Columns[0].ColumnName);
+				Assert.AreEqual("string"   , proc.ResultTable.Columns[0].MemberType);
+				Assert.AreEqual("objid"    , proc.ResultTable.Columns[1].ColumnName);
+				Assert.AreEqual("int?"     , proc.ResultTable.Columns[1].MemberType);
+
+			}
+		}
+#endif
 	}
 }

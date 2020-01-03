@@ -676,6 +676,7 @@ namespace LinqToDB.ServiceModel
 							Append(elem.IsIdentity);
 							Append(elem.IsUpdatable);
 							Append(elem.IsInsertable);
+							Append(elem.IsDynamic);
 							Append((int)elem.DataType);
 							Append(elem.DbType);
 							Append(elem.Length);
@@ -920,7 +921,7 @@ namespace LinqToDB.ServiceModel
 							Append(elem.IsNot);
 							Append(elem.Expr2);
 							Append(elem.Escape);
-
+							Append(elem.IsSqlLike);
 							break;
 						}
 
@@ -1334,6 +1335,7 @@ namespace LinqToDB.ServiceModel
 							var isIdentity       = ReadBool();
 							var isUpdatable      = ReadBool();
 							var isInsertable     = ReadBool();
+							var isDynamic        = ReadBool();
 							var dataType         = ReadInt();
 							var dbType           = ReadString();
 							var length           = ReadNullableInt();
@@ -1352,8 +1354,9 @@ namespace LinqToDB.ServiceModel
 								IsPrimaryKey    = isPrimaryKey,
 								PrimaryKeyOrder = primaryKeyOrder,
 								IsIdentity      = isIdentity,
-								IsInsertable    = isInsertable,
 								IsUpdatable     = isUpdatable,
+								IsInsertable    = isInsertable,
+								IsDynamic       = isDynamic,
 								DataType        = (DataType)dataType,
 								DbType          = dbType,
 								Length          = length,
@@ -1598,8 +1601,8 @@ namespace LinqToDB.ServiceModel
 							var isNot  = ReadBool();
 							var expr2  = Read<ISqlExpression>();
 							var escape = Read<ISqlExpression>();
-
-							obj = new SqlPredicate.Like(expr1, isNot, expr2, escape);
+							var isSqlLike = ReadBool();
+							obj = new SqlPredicate.Like(expr1, isNot, expr2, escape, isSqlLike);
 
 							break;
 						}
@@ -1807,7 +1810,7 @@ namespace LinqToDB.ServiceModel
 							var fields      = ReadArray<SqlField>();
 							var isRecursive = ReadBool();
 
-							var c = new CteClause(body, fields, objectType, name) { IsRecursive = isRecursive };
+							var c = new CteClause(body, fields, objectType, isRecursive, name);
 
 							obj = c;
 

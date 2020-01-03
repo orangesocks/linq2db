@@ -219,6 +219,9 @@ namespace LinqToDB
 
 				if (OnTraceConnection != null)
 					_dataConnection.OnTraceConnection = OnTraceConnection;
+
+				if (MappingSchema != null && MappingSchema != _dataConnection.MappingSchema)
+					_dataConnection.AddMappingSchema(MappingSchema);
 			}
 
 			return _dataConnection;
@@ -368,7 +371,7 @@ namespace LinqToDB
 		{
 			var dct = new DataContextTransaction(this);
 
-			await dct.BeginTransactionAsync(level).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
+			await dct.BeginTransactionAsync(level, cancellationToken).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
 			return dct;
 		}
@@ -384,7 +387,7 @@ namespace LinqToDB
 		{
 			var dct = new DataContextTransaction(this);
 
-			await dct.BeginTransactionAsync().ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
+			await dct.BeginTransactionAsync(cancellationToken).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
 			return dct;
 		}
@@ -407,8 +410,8 @@ namespace LinqToDB
 
 			public void Dispose()
 			{
-				_dataContext.ReleaseQuery();
 				_queryRunner.Dispose();
+				_dataContext.ReleaseQuery();
 			}
 
 			public int ExecuteNonQuery()

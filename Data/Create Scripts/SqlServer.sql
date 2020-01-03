@@ -1116,4 +1116,28 @@ BEGIN
 END
 GO
 
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'Issue1897')
+BEGIN DROP Procedure Issue1897 END
+GO
 
+CREATE PROCEDURE dbo.Issue1897
+AS
+BEGIN
+	RETURN 4
+END
+
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'TF' AND name = 'Issue1921')
+BEGIN DROP FUNCTION Issue1921 END
+GO
+
+CREATE FUNCTION dbo.Issue1921()
+RETURNS @table table (name sysname, objid    int)
+AS
+BEGIN
+  INSERT INTO @table
+  SELECT  name, object_id from sys.objects where name ='Issue1921'
+RETURN
+END
+GO

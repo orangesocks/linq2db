@@ -64,11 +64,13 @@ namespace LinqToDB.Expressions
 
 		internal static bool EqualsTo(this Expression expr1, Expression expr2,
 			Dictionary<Expression,QueryableAccessor> queryableAccessorDic,
+			Dictionary<Expression,Expression>        queryDependedObjects,
 			bool compareConstantValues = false)
 		{
 			return EqualsTo(expr1, expr2, new EqualsToInfo
 			{
 				QueryableAccessorDic  = queryableAccessorDic,
+				QueryDependedObjects  = queryDependedObjects,
 				CompareConstantValues = compareConstantValues
 			});
 		}
@@ -77,6 +79,7 @@ namespace LinqToDB.Expressions
 		{
 			public HashSet<Expression>                      Visited = new HashSet<Expression>();
 			public Dictionary<Expression,QueryableAccessor> QueryableAccessorDic;
+			public Dictionary<Expression,Expression>        QueryDependedObjects;
 			public bool                                     CompareConstantValues;
 		}
 
@@ -469,7 +472,10 @@ namespace LinqToDB.Expressions
 
 					if (dependentAttribute != null)
 					{
-						if (!dependentAttribute.ExpressionsEqual(expr1.Arguments[i], expr2.Arguments[i], (e1, e2) => e1.EqualsTo(e2, info)))
+						var prevArg = expr1.Arguments[i];
+						if (info.QueryDependedObjects != null && info.QueryDependedObjects.TryGetValue(expr1.Arguments[i], out var nevValue))
+							prevArg = nevValue;
+						if (!dependentAttribute.ExpressionsEqual(prevArg, expr2.Arguments[i], (e1, e2) => e1.EqualsTo(e2, info)))
 							return false;
 					}
 					else
@@ -971,7 +977,7 @@ namespace LinqToDB.Expressions
 		{
 			var type = method.Method.DeclaringType;
 
-			return type == typeof(Queryable) || (enumerable && type == typeof(Enumerable)) || type == typeof(LinqExtensions);
+			return type == typeof(Queryable) || (enumerable && type == typeof(Enumerable)) || type == typeof(LinqExtensions) || type == typeof(DataExtensions);
 		}
 
 		public static bool IsAsyncExtension(this MethodCallExpression method, bool enumerable = true)
@@ -1038,6 +1044,11 @@ namespace LinqToDB.Expressions
 		public static bool IsAssociation(this MethodCallExpression method, MappingSchema mappingSchema)
 		{
 			return mappingSchema.GetAttribute<AssociationAttribute>(method.Method.DeclaringType, method.Method) != null;
+		}
+
+		public static bool IsCte(this MethodCallExpression method, MappingSchema mappingSchema)
+		{
+			return method.IsQueryable("AsCte", "GetCte");
 		}
 
 		static Expression FindLevel(Expression expression, MappingSchema mapping, int level, ref int current)
@@ -1150,6 +1161,13 @@ namespace LinqToDB.Expressions
 							return ((PropertyInfo)member.Member).GetValue(member.Expression.EvaluateExpression(), null);
 
 						break;
+					}
+				case ExpressionType.Call:
+					{
+						var mc = (MethodCallExpression)expr;
+						var arguments = mc.Arguments.Select(EvaluateExpression).ToArray();
+						var instance  = mc.Object.EvaluateExpression();
+						return mc.Method.Invoke(instance, arguments);
 					}
 			}
 

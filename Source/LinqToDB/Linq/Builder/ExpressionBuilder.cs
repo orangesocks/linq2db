@@ -104,6 +104,8 @@ namespace LinqToDB.Linq.Builder
 
 			_expressionAccessors = expression.GetExpressionAccessors(ExpressionParam);
 
+			CollectQueryDepended(expression);
+
 			CompiledParameters   = compiledParameters;
 			DataContext          = dataContext;
 			OriginalExpression   = expression;
@@ -294,6 +296,8 @@ namespace LinqToDB.Linq.Builder
 
 			return expr;
 		}
+
+		#endregion
 
 		#region ConvertParameters
 
@@ -509,7 +513,7 @@ namespace LinqToDB.Linq.Builder
 
 		Expression ExposeExpression(Expression expression)
 		{
-			return expression.Transform(expr =>
+			var result = expression.Transform(expr =>
 			{
 				switch (expr.NodeType)
 				{
@@ -523,7 +527,7 @@ namespace LinqToDB.Linq.Builder
 								return Expression.NotEqual(obj, Expression.Constant(null, obj.Type));
 							}
 
-							var l  = ConvertMethodExpression(me.Expression?.Type ?? me.Member.ReflectedTypeEx(), me.Member);
+							var l  = ConvertMethodExpression(me.Expression?.Type ?? me.Member.ReflectedTypeEx(), me.Member, out var alias);
 
 							if (l != null)
 							{
@@ -553,8 +557,9 @@ namespace LinqToDB.Linq.Builder
 
 								if (ex.Type != expr.Type)
 									ex = new ChangeTypeExpression(ex, expr.Type);
-
-								return ExposeExpression(ex);
+								ex = ExposeExpression(ex);
+								RegisterAlias(ex, alias);
+								return ex;
 							}
 
 							break;
@@ -565,11 +570,13 @@ namespace LinqToDB.Linq.Builder
 							var ex = (UnaryExpression)expr;
 							if (ex.Method != null)
 							{
-								var l = ConvertMethodExpression(ex.Method.DeclaringType, ex.Method);
+								var l = ConvertMethodExpression(ex.Method.DeclaringType, ex.Method, out var alias);
 								if (l != null)
 								{
 									var exposed = l.GetBody(ex.Operand);
-									return ExposeExpression(exposed);
+									exposed = ExposeExpression(exposed);
+									RegisterAlias(exposed, alias);
+									return exposed;
 								}
 							}
 							break;
@@ -634,6 +641,9 @@ namespace LinqToDB.Linq.Builder
 
 				return expr;
 			});
+
+			RelocateAlias(expression, result);
+			return result;
 		}
 
 		#endregion
@@ -657,6 +667,8 @@ namespace LinqToDB.Linq.Builder
 			expr = expr.Transform((Func<Expression,TransformInfo>)OptimizeExpressionImpl);
 
 			_optimizedExpressions[expression] = expr;
+
+			RelocateAlias(expression, expr);
 
 			return expr;
 		}
@@ -740,26 +752,29 @@ namespace LinqToDB.Linq.Builder
 								case "ElementAt"            :
 								case "ElementAtOrDefault"   : return new TransformInfo(ConvertElementAt     (call));
 								case "LoadWith"             : return new TransformInfo(expr, true);
+								case "With"                 : return new TransformInfo(expr);
 							}
 						}
-						else
+
+						var l = ConvertMethodExpression(call.Object?.Type ?? call.Method.ReflectedTypeEx(), call.Method, out var alias);
+
+						if (l != null)
 						{
-							var l = ConvertMethodExpression(call.Object?.Type ?? call.Method.ReflectedTypeEx(), call.Method);
+							var optimized = OptimizeExpression(ConvertMethod(call, l));
+							RegisterAlias(optimized, alias);
+							return new TransformInfo(optimized);
+						}
 
-							if (l != null)
-								return new TransformInfo(OptimizeExpression(ConvertMethod(call, l)));
+						if (CompiledParameters == null && typeof(IQueryable).IsSameOrParentOf(expr.Type))
+						{
+							var attr = GetTableFunctionAttribute(call.Method);
 
-							if (CompiledParameters == null && typeof(IQueryable).IsSameOrParentOf(expr.Type))
+							if (attr == null && !call.IsQueryable())
 							{
-								var attr = GetTableFunctionAttribute(call.Method);
+								var ex = ConvertIQueryable(expr);
 
-								if (attr == null)
-								{
-									var ex = ConvertIQueryable(expr);
-
-									if (!ReferenceEquals(ex, expr))
-										return new TransformInfo(ConvertExpressionTree(ex));
-								}
+								if (!ReferenceEquals(ex, expr))
+									return new TransformInfo(ConvertExpressionTree(ex));
 							}
 						}
 
@@ -770,12 +785,13 @@ namespace LinqToDB.Linq.Builder
 			return new TransformInfo(expr);
 		}
 
-		LambdaExpression ConvertMethodExpression(Type type, MemberInfo mi)
+		LambdaExpression ConvertMethodExpression(Type type, MemberInfo mi, out string alias)
 		{
 			var attr = MappingSchema.GetAttribute<ExpressionMethodAttribute>(type, mi, a => a.Configuration);
 
 			if (attr != null)
 			{
+				alias = attr.Alias ?? mi.Name;
 				if (attr.Expression != null)
 					return attr.Expression;
 
@@ -799,13 +815,12 @@ namespace LinqToDB.Linq.Builder
 						expr = Expression.Call(mi.DeclaringType, attr.MethodName, Array<Type>.Empty);
 					}
 
-					var call = Expression.Lambda<Func<LambdaExpression>>(Expression.Convert(expr,
-						typeof(LambdaExpression)));
-
-					return call.Compile()();
+					var evaluated = (LambdaExpression)(expr.EvaluateExpression());
+					return evaluated;
 				}
 			}
 
+			alias = null;
 			return null;
 		}
 
@@ -1565,7 +1580,20 @@ namespace LinqToDB.Linq.Builder
 				var exas = expression.GetExpressionAccessors(p);
 				var expr = ReplaceParameter(exas, expression, _ => {}).ValueExpression;
 
-				if (expr.Find(e => e.NodeType == ExpressionType.Parameter && e != p) != null)
+				var allowedParameters = new HashSet<ParameterExpression>() { p };
+
+				if (null != expr.Find(e => {
+					if (e is LambdaExpression lambda)
+					{
+						// allow parameters, declared inside expr
+						foreach (var param in lambda.Parameters)
+							allowedParameters.Add(param);
+					}
+					else if (e is ParameterExpression pe)
+						return !allowedParameters.Contains(pe);
+
+					return false;
+				}))
 					return expression;
 
 				var l    = Expression.Lambda<Func<Expression,IQueryable>>(Expression.Convert(expr, typeof(IQueryable)), new [] { p });
@@ -1634,6 +1662,29 @@ namespace LinqToDB.Linq.Builder
 
 		#endregion
 
+		#region SqQueryDepended support
+
+		void CollectQueryDepended(Expression expr)
+		{
+			expr.Visit(e =>
+			{
+				if (e.NodeType == ExpressionType.Call)
+				{
+					var call = (MethodCallExpression)e;
+					var parameters = call.Method.GetParameters();
+					for (int i = 0; i < parameters.Length; i++)
+					{
+						var attr = parameters[i].GetCustomAttributes(typeof(SqlQueryDependentAttribute), false).Cast<SqlQueryDependentAttribute>()
+							.FirstOrDefault();
+						if (attr != null)
+							_query.AddQueryDependedObject(call.Arguments[i], attr);
+					}
+				}
+			});
+		}
+
+		#endregion
+
 		#region Helpers
 
 		MethodInfo GetQueryableMethodInfo(MethodCallExpression method, [InstantHandle] Func<MethodInfo,bool,bool> predicate)
@@ -1660,12 +1711,6 @@ namespace LinqToDB.Linq.Builder
 				method.Method.GetParameters()[1].ParameterType.GetGenericArgumentsEx() :
 				method.Method.GetParameters()[1].ParameterType.GetGenericArgumentsEx()[0].GetGenericArgumentsEx();
 		}
-
-		#endregion
-
-		#endregion
-
-		#region Helpers
 
 		/// <summary>
 		/// Gets Expression.Equal if <paramref name="left"/> and <paramref name="right"/> expression types are not same
