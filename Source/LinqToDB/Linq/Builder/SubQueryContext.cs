@@ -9,6 +9,10 @@ namespace LinqToDB.Linq.Builder
 
 	class SubQueryContext : PassThroughContext
 	{
+#if DEBUG
+		string? _sqlQueryText => SelectQuery.SqlText;
+#endif
+
 		public SubQueryContext(IBuildContext subQuery, SelectQuery selectQuery, bool addToSql)
 			: base(subQuery)
 		{
@@ -30,21 +34,28 @@ namespace LinqToDB.Linq.Builder
 			Statement = subQuery.Statement;
 		}
 
-		public          IBuildContext SubQuery    { get; private set; }
-		public override SelectQuery   SelectQuery { get; set; }
-		public override IBuildContext Parent      { get; set; }
+		public          IBuildContext  SubQuery    { get; private set; }
+		public override SelectQuery    SelectQuery { get; set; }
+		public override IBuildContext? Parent      { get; set; }
 
-		public override SqlInfo[] ConvertToSql(Expression expression, int level, ConvertFlags flags)
+		public override SqlInfo[] ConvertToSql(Expression? expression, int level, ConvertFlags flags)
 		{
-			return SubQuery
+			expression = SequenceHelper.CorrectExpression(expression, this, Context);
+
+			var indexes = SubQuery
 				.ConvertToIndex(expression, level, flags)
+				.ToArray();
+
+			var result = indexes
 				.Select(idx => new SqlInfo(idx.MemberChain) { Sql = idx.Index < 0 ? idx.Sql : SubQuery.SelectQuery.Select.Columns[idx.Index] })
 				.ToArray();
+
+			return result;
 		}
 
 		// JoinContext has similar logic. Consider to review it.
 		//
-		public override SqlInfo[] ConvertToIndex(Expression expression, int level, ConvertFlags flags)
+		public override SqlInfo[] ConvertToIndex(Expression? expression, int level, ConvertFlags flags)
 		{
 			return ConvertToSql(expression, level, flags)
 				.Select(idx =>
@@ -57,7 +68,7 @@ namespace LinqToDB.Linq.Builder
 				.ToArray();
 		}
 
-		public override IsExpressionResult IsExpression(Expression expression, int level, RequestFor testFlag)
+		public override IsExpressionResult IsExpression(Expression? expression, int level, RequestFor testFlag)
 		{
 			switch (testFlag)
 			{
@@ -82,7 +93,7 @@ namespace LinqToDB.Linq.Builder
 
 		public override int ConvertToParentIndex(int index, IBuildContext context)
 		{
-			var idx = GetIndex(context.SelectQuery.Select.Columns[index]);
+			var idx = context == this ? index : GetIndex(context.SelectQuery.Select.Columns[index]);
 			return Parent?.ConvertToParentIndex(idx, this) ?? idx;
 		}
 
@@ -98,7 +109,7 @@ namespace LinqToDB.Linq.Builder
 				SelectQuery.From.Tables[0].Alias = alias;
 		}
 
-		public override ISqlExpression GetSubQuery(IBuildContext context)
+		public override ISqlExpression? GetSubQuery(IBuildContext context)
 		{
 			return null;
 		}

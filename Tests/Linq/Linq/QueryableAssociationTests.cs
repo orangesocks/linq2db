@@ -4,9 +4,9 @@ using System.Linq;
 using System.Linq.Expressions;
 using LinqToDB;
 using LinqToDB.Data;
+using LinqToDB.Linq;
 using LinqToDB.Mapping;
 using NUnit.Framework;
-using Tests.Tools;
 
 namespace Tests.Playground
 {
@@ -20,15 +20,15 @@ namespace Tests.Playground
 		    public int Id { get; set; }
 
 			[Column]
-			public string OwnerStr { get; set; }
+			public string? OwnerStr { get; set; }
 
 			[Association(QueryExpressionMethod = nameof(OtherImpl), CanBeNull = true)]
-			public SomeOtherEntity Other { get; set; }
+			public SomeOtherEntity? Other { get; set; }
 
 			[Association(QueryExpressionMethod = nameof(OtherImpl), CanBeNull = true)]
 			public List<SomeOtherEntity> Others { get; set; } = new List<SomeOtherEntity>();
 
-			public SomeOtherEntity       OtherMapped  { get; set; }
+			public SomeOtherEntity?      OtherMapped  { get; set; }
 			public List<SomeOtherEntity> OthersMapped { get; set; } = new List<SomeOtherEntity>();
 
 			private static Expression<Func<SomeEntity, IDataContext, IQueryable<SomeOtherEntity>>> OtherImpl()
@@ -47,7 +47,7 @@ namespace Tests.Playground
 			}
 
 			[Association(QueryExpressionMethod = nameof(OtherFromSqlImpl), CanBeNull = true)]
-			public SomeOtherEntity OtherFromSql { get; set; }
+			public SomeOtherEntity? OtherFromSql { get; set; }
 
 			private static Expression<Func<SomeEntity, IDataContext, IQueryable<SomeOtherEntity>>> OtherFromSqlImpl()
 			{
@@ -65,7 +65,7 @@ namespace Tests.Playground
 			{
 				if (ReferenceEquals(null, obj)) return false;
 				if (ReferenceEquals(this, obj)) return true;
-				if (obj.GetType() != this.GetType()) return false;
+				if (obj.GetType() != GetType()) return false;
 				return Equals((SomeEntity)obj);
 			}
 
@@ -89,7 +89,7 @@ namespace Tests.Playground
 		    public int Id { get; set; }
 
 			[Column]
-			public string StrValue { get; set; }
+			public string? StrValue { get; set; }
 
 			protected bool Equals(SomeOtherEntity other)
 			{
@@ -100,7 +100,7 @@ namespace Tests.Playground
 			{
 				if (ReferenceEquals(null, obj)) return false;
 				if (ReferenceEquals(this, obj)) return true;
-				if (obj.GetType() != this.GetType()) return false;
+				if (obj.GetType() != GetType()) return false;
 				return Equals((SomeOtherEntity)obj);
 			}
 
@@ -189,7 +189,7 @@ namespace Tests.Playground
 				var query = from e in db.GetTable<SomeEntity>()
 					select new
 					{
-						V1 = e.Other.StrValue + "_B",
+						V1 = e.Other!.StrValue + "_B",
 						V2 = Sql.AsSql(e.Other.StrValue + "_C"),
 						e.Other,
 						Inner = new
@@ -202,7 +202,7 @@ namespace Tests.Playground
 				var expectedQuery = from e in entities
 					select new
 					{
-						V1 = e.Other.StrValue + "_B",
+						V1 = e.Other!.StrValue + "_B",
 						V2 = e.Other.StrValue + "_C",
 						e.Other,
 						Inner = new
@@ -394,7 +394,11 @@ AS RETURN
 			using (db.CreateLocalTable(others))
 			{
 				CreateFunction(db, "SomeOtherEntity");
-				var query = db.GetTable<SomeEntity>().With("NOLOCK").LoadWith(e => e.Other).LoadWith(e => e.Others).LoadWith(e => e.OthersFromSql).Take(2);
+				var query = db.GetTable<SomeEntity>().With("NOLOCK")
+					.LoadWith(e => e.Other)
+					.LoadWith(e => e.Others)
+					.LoadWith(e => e.OthersFromSql)
+					.Take(2);
 
 				var expectedQuery = entities.Take(2);
 
@@ -435,7 +439,7 @@ AS RETURN
 					Other         = e.Other,
 					OthersFromSql = e.OthersFromSql.ToArray(),
 					OtherFromSql  = e.OtherFromSql
-				});
+				}).ToArray();
 
 				AreEqualWithComparer(expected, result);
 				DropFunction(db);
@@ -464,7 +468,7 @@ AS RETURN
 			public int Id { get; set; }
 
 			[Association(QueryExpressionMethod = nameof(GetSomeValue), CanBeNull = false)]
-			public SomeTableType SomeValue { get; set; }
+			public SomeTableType SomeValue { get; set; } = null!;
 
 			private static Expression<Func<LargeNumberEntity, IDataContext, IQueryable<SomeTableType>>> GetSomeValue()
 			{
@@ -503,6 +507,222 @@ WHERE
 
 				Console.WriteLine(q.ToString());
 			}
+		}
+
+		public interface ITreeItem
+		{
+			int Id { get; set; }
+			int? ParentId { get; set; }
+			IList<TreeItem> Children { get; set; }
+			TreeItem? Parent { get; set; }
+		}
+
+		[Table("TreeItem")]
+		public class TreeItem : ITreeItem
+		{
+			[Column]
+			public int Id { get; set; }
+			[Column]
+			public int? ParentId { get; set; }
+
+			[Association(ThisKey = nameof(Id), OtherKey = nameof(ParentId))]
+			public IList<TreeItem> Children { get; set; } = null!;
+
+			[Association(ThisKey = nameof(ParentId), OtherKey = nameof(Id))]
+			public TreeItem? Parent { get; set; }
+
+		}
+
+		[Test]
+		public void AssociationFromInterfaceInGenericMethod([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
+		{
+			using (new AllowMultipleQuery())
+			using (var db = (DataConnection)GetDataContext(context, GetMapping()))
+			using (db.CreateLocalTable<TreeItem>())
+			{
+				var treeItems = db.GetTable<TreeItem>();
+
+				DoGeneric(treeItems);
+			}
+		}
+		
+		void DoGeneric<T>(ITable<T> treeItems) where T: ITreeItem
+		{
+			var query1 = treeItems
+				.Where(x => x.Children.Any());
+
+			var result1 = query1.ToArray();
+
+			var query2 = from t in treeItems
+				where t.Parent!.Id > 0 
+				select t.Children;
+
+			var result2 = query2.ToArray();
+
+		}
+
+
+		public class Entity
+		{
+			[Column]
+			public int Id { get; set; }
+
+			[Association(QueryExpressionMethod = nameof(Entity2LanguageExpr), CanBeNull = true, Relationship = Relationship.OneToOne)]
+			public Entity2Language? Entity2Language { get; set; }
+
+			public static Expression<Func<Entity, IDataContext, IQueryable<Entity2Language>>> Entity2LanguageExpr()
+			{
+				return (e, db) => db
+					.GetTable<Entity2Language>()
+					.Where(x => x.EntityId == e.Id)
+					.Take(1);
+			}
+		}
+
+		public class Entity2Language
+		{
+			[Column]
+			public int Id { get; set; }
+
+			[Column]
+			public int EntityId { get; set; }
+
+			[Column]
+			public int LanguageId { get; set; }
+
+			[Association(ThisKey = nameof(LanguageId), OtherKey = nameof(QueryableAssociationTests.Language.Id), CanBeNull = false, Relationship = Relationship.OneToOne)]
+			public Language Language { get; set; } = null!;
+		}
+
+		public class Language
+		{
+			[Column]
+			public int Id { get; set; }
+
+			[Column]
+			public string Name { get; set; } = null!;
+		}
+
+		[Test]
+		public void SelectAssociations([IncludeDataSources(TestProvName.AllSqlServer)] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable(new[]
+			{
+				new Entity {Id = 1}
+			}))
+			using (db.CreateLocalTable(new[]
+			{
+				new Entity2Language {Id = 1, EntityId = 1, LanguageId = 1}
+			}))
+			using (db.CreateLocalTable(new[]
+			{
+				new Language {Id = 1, Name = "English"}
+			}))
+			{
+				var value = db
+					.GetTable<Entity>()
+					.Select(x => new
+					{
+						// This works
+						EntityId = x.Id,
+						x.Entity2Language!.LanguageId,
+						// This caused exception
+						LanguageName = x.Entity2Language.Language.Name
+					})
+					.First();
+			
+				Assert.AreEqual(1, value.EntityId);
+				Assert.AreEqual(1, value.LanguageId);
+				Assert.AreEqual("English", value.LanguageName);
+			}
+		}
+
+		class EntityWithUser
+		{
+			[Column]
+			public int UserId { get; set; }
+
+			[ExpressionMethod(nameof(BelongsToCurrentUserExpr))]
+			public bool BelongsToCurrentUser { get; set; }
+
+			[ExpressionMethod(nameof(BelongsToCurrentUserFailExpr))]
+			public bool BelongsToCurrentUserFail { get; set; }
+			
+			public static Expression<Func<EntityWithUser, CustomDataConnection, bool>> BelongsToCurrentUserExpr()
+			{
+				return (e, db) => e.UserId == db.CurrentUserId;
+			}
+
+			public static Expression<Func<EntityWithUser, CustomDataContext, bool>> BelongsToCurrentUserFailExpr()
+			{
+				return (e, db) => e.UserId == db.CurrentUserId;
+			}
+		}
+	
+		[Test]
+		public void TestPropertiesFromDataConnection([IncludeDataSources(false, TestProvName.AllSQLite)] string context, [Values(1, 2, 3)] int currentUser)
+		{
+			using (var db = new CustomDataConnection(context))
+			using (db.CreateLocalTable(new[]
+			{
+				new EntityWithUser {UserId = 1},
+				new EntityWithUser {UserId = 2},
+				new EntityWithUser {UserId = 2},
+				new EntityWithUser {UserId = 3},
+				new EntityWithUser {UserId = 3},
+				new EntityWithUser {UserId = 3},
+			}))
+			{
+				db.CurrentUserId = currentUser;
+				var count = db
+					.GetTable<EntityWithUser>()
+					.Count(x => x.BelongsToCurrentUser);
+			
+				Assert.AreEqual(currentUser, count);
+			}
+		}
+	
+		[Test]
+		public void TestPropertiesFromDataContext([IncludeDataSources(false, TestProvName.AllSQLite)] string context)
+		{
+			using (var db = new CustomDataContext(context))
+			using (db.CreateLocalTable(new[]
+			{
+				new EntityWithUser {UserId = 1},
+				new EntityWithUser {UserId = 2},
+				new EntityWithUser {UserId = 2},
+				new EntityWithUser {UserId = 3},
+				new EntityWithUser {UserId = 3},
+				new EntityWithUser {UserId = 3},
+			}))
+			{
+				db.CurrentUserId = 1;
+
+				Assert.Throws<LinqException>(() => db
+					.GetTable<EntityWithUser>()
+					.Count(x => x.BelongsToCurrentUser));
+		
+			}
+		}
+	
+		class CustomDataConnection : DataConnection
+		{
+			public CustomDataConnection(string? configurationString) : base(configurationString)
+			{
+			}
+
+			public int CurrentUserId { get; set; }
+		}
+
+		class CustomDataContext : DataContext
+		{
+		
+			public CustomDataContext(string? configurationString) : base(configurationString)
+			{
+			}
+
+			public int CurrentUserId { get; set; }
 		}
 
 	}
