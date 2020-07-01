@@ -212,7 +212,7 @@ namespace LinqToDB.Linq.Builder
 						{
 							if (IsSubQuery(context, ce))
 							{
-								if (!IsMultipleQuery(ce))
+								if (!IsMultipleQuery(ce, context.Builder.MappingSchema))
 								{
 									var info = GetSubQueryContext(context, ce);
 									if (alias != null)
@@ -322,7 +322,7 @@ namespace LinqToDB.Linq.Builder
 
 						if ((_buildMultipleQueryExpressions == null || !_buildMultipleQueryExpressions.Contains(ce)) && IsSubQuery(context, ce))
 						{
-							if (IsMultipleQuery(ce))
+							if (IsMultipleQuery(ce, MappingSchema))
 								return new TransformInfo(BuildMultipleQuery(context, ce, enforceServerSide));
 
 							return new TransformInfo(GetSubQueryExpression(context, ce, enforceServerSide, alias));
@@ -493,9 +493,14 @@ namespace LinqToDB.Linq.Builder
 			return expr;
 		}
 
-		static bool IsMultipleQuery(MethodCallExpression ce)
+		static bool IsMultipleQuery(MethodCallExpression ce, MappingSchema mappingSchema)
 		{
-			return typeof(IEnumerable).IsSameOrParentOf(ce.Type) && ce.Type != typeof(string) && !ce.Type.IsArray;
+			//TODO: Multiply query check should be smarter, possibly not needed if we create fallback mechanism
+			return !ce.IsQueryable(FirstSingleBuilder.MethodNames) 
+			       && typeof(IEnumerable).IsSameOrParentOf(ce.Type) 
+			       && ce.Type != typeof(string) 
+			       && !ce.Type.IsArray 
+			       && !ce.IsAggregate(mappingSchema);
 		}
 
 		class SubQueryContextInfo
@@ -514,7 +519,7 @@ namespace LinqToDB.Linq.Builder
 
 			foreach (var item in sbi)
 			{
-				if (expr.EqualsTo(item.Method, new Dictionary<Expression,QueryableAccessor>(), null, null))
+				if (expr.EqualsTo(item.Method, DataContext, new Dictionary<Expression,QueryableAccessor>(), null, null))
 					return item;
 			}
 
@@ -549,7 +554,8 @@ namespace LinqToDB.Linq.Builder
 
 		Expression BuildSql(IBuildContext context, Expression expression, string? alias)
 		{
-			var sqlex = ConvertToSqlExpression(context, expression);
+			//TODO: Check that we can pass column descriptor here
+			var sqlex = ConvertToSqlExpression(context, expression, null);
 			var idx   = context.SelectQuery.Select.Add(sqlex);
 
 			if (alias != null)
@@ -557,7 +563,7 @@ namespace LinqToDB.Linq.Builder
 
 			idx = context.ConvertToParentIndex(idx, context);
 
-			var field = BuildSql(expression, idx);
+			var field = BuildSql(expression, idx, sqlex);
 
 			return field;
 		}
@@ -571,12 +577,12 @@ namespace LinqToDB.Linq.Builder
 
 			idx = context.ConvertToParentIndex(idx, context);
 
-			var field = BuildSql(overrideType ?? sqlExpression.SystemType!, idx);
+			var field = BuildSql(overrideType ?? sqlExpression.SystemType!, idx, sqlExpression);
 
 			return field;
 		}
 
-		public Expression BuildSql(Expression expression, int idx)
+		public Expression BuildSql(Expression expression, int idx, ISqlExpression sqlExpression)
 		{
 			var type = expression.Type;
 
@@ -586,14 +592,19 @@ namespace LinqToDB.Linq.Builder
 					type = cex.Type;
 			}
 
-			return BuildSql(type, idx);
+			return BuildSql(type, idx, sqlExpression);
 		}
 
-		public Expression BuildSql(Type type, int idx)
+		public Expression BuildSql(Type type, int idx, IValueConverter? converter)
 		{
-			return new ConvertFromDataReaderExpression(type, idx, DataReaderLocal);
+			return new ConvertFromDataReaderExpression(type, idx, converter, DataReaderLocal);
 		}
 
+		public Expression BuildSql(Type type, int idx, ISqlExpression? sourceExpression)
+		{
+			return BuildSql(type, idx, QueryHelper.GetValueConverter(sourceExpression));
+		}
+		
 		#endregion
 
 		#region IsNonSqlMember
@@ -844,7 +855,7 @@ namespace LinqToDB.Linq.Builder
 				{
 					case ExpressionType.MemberAccess :
 						{
-							var root = e.GetRootObject(mappingSchema);
+							var root = context.Builder.GetRootObject(e);
 
 							if (root != null &&
 								root.NodeType == ExpressionType.Parameter &&
@@ -864,7 +875,7 @@ namespace LinqToDB.Linq.Builder
 										var childType  = me.Type;
 
 										var queryMethod = AssociationHelper.CreateAssociationQueryLambda(context.Builder,
-											me.Member, associationContext.Descriptor, parentType, parentType, childType, false,
+											new AccessorMember(me), associationContext.Descriptor, parentType, parentType, childType, false,
 											false, null, out _);
 
 										var dcConst = Expression.Constant(context.Builder.DataContext.Clone(true));
@@ -892,7 +903,7 @@ namespace LinqToDB.Linq.Builder
 		}
 
 		public Expression? AssociationRoot;
-		public Stack<Tuple<MemberInfo, IBuildContext, List<LoadWithInfo[]>?>>? AssociationPath;
+		public Stack<Tuple<AccessorMember, IBuildContext, List<LoadWithInfo[]>?>>? AssociationPath;
 
 		HashSet<Expression>? _buildMultipleQueryExpressions;
 
@@ -920,7 +931,7 @@ namespace LinqToDB.Linq.Builder
 					}
 				}
 
-				var root = e.GetRootObject(MappingSchema);
+				var root = context.Builder.GetRootObject(e);
 
 				if (root != null &&
 					root.NodeType == ExpressionType.Parameter &&

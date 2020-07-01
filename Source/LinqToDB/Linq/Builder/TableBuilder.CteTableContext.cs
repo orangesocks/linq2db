@@ -38,6 +38,7 @@ namespace LinqToDB.Linq.Builder
 					throw new InvalidOperationException();
 			}
 
+			bodyExpr = builder.ConvertExpression(bodyExpr);
 			builder.RegisterCte(query, bodyExpr, () => new CteClause(null, bodyExpr.Type.GetGenericArguments()[0], isRecursive, name));
 
 			var cte = builder.BuildCte(bodyExpr,
@@ -145,10 +146,7 @@ namespace LinqToDB.Linq.Builder
 						                  info.MemberChain.LastOrDefault()?.Name;
 						}	
 						var field    = RegisterCteField(baseInfo?.Sql, info.Sql, info.Index, alias);
-						return new SqlInfo(info.MemberChain)
-						{
-							Sql = field,
-						};
+						return new SqlInfo(info.MemberChain, field);
 					})
 					.ToArray();
 				return result;

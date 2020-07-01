@@ -333,7 +333,8 @@ namespace LinqToDB.SqlQuery
 
 		#region ISqlExpression Members
 
-		bool  ISqlExpression.CanBeNull  => true;
+		public bool CanBeNull { get; set; } = true;
+
 		int   ISqlExpression.Precedence => Precedence.Primary;
 		Type? ISqlExpression.SystemType => ObjectType;
 
@@ -372,6 +373,16 @@ namespace LinqToDB.SqlQuery
 			{
 				Name         = "INSERTED",
 				PhysicalName = "INSERTED",
+				Schema       = null,
+				Database     = null,
+				Server       = null,
+				SqlTableType = SqlTableType.SystemTable,
+			};
+		internal static SqlTable Deleted(Type objectType)
+			=> new SqlTable(objectType)
+			{
+				Name         = "DELETED",
+				PhysicalName = "DELETED",
 				Schema       = null,
 				Database     = null,
 				Server       = null,

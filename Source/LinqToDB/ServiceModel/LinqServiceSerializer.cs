@@ -947,6 +947,19 @@ namespace LinqToDB.ServiceModel
 							break;
 						}
 
+					case QueryElementType.IsTruePredicate :
+						{
+							var elem = (SqlPredicate.IsTrue)e;
+
+							Append(elem.Expr1);
+							Append(elem.IsNot);
+							Append(elem.TrueValue);
+							Append(elem.FalseValue);
+							Append(elem.WithNull == null ? 3 : elem.WithNull.Value ? 1 : 0);
+
+							break;
+						}
+
 					case QueryElementType.IsNullPredicate :
 						{
 							var elem = (SqlPredicate.IsNull)e;
@@ -1175,6 +1188,7 @@ namespace LinqToDB.ServiceModel
 
 							Append(elem.With);
 							Append(elem.Table);
+							Append(elem.Output);
 							Append(elem.Top);
 							Append(elem.SelectQuery);
 							Append(elem.Parameters);
@@ -1696,6 +1710,19 @@ namespace LinqToDB.ServiceModel
 							break;
 						}
 
+					case QueryElementType.IsTruePredicate :
+						{
+							var expr1 = Read<ISqlExpression>()!;
+							var isNot = ReadBool();
+							var trueValue  = Read<ISqlExpression>()!;
+							var falseValue = Read<ISqlExpression>()!;
+							var withNull   = ReadInt();
+							
+							obj = new SqlPredicate.IsTrue(expr1, trueValue, falseValue, withNull == 3 ? (bool?)null : withNull == 1, isNot);
+
+							break;
+						}
+
 					case QueryElementType.IsNullPredicate :
 						{
 							var expr1 = Read<ISqlExpression>()!;
@@ -1955,11 +1982,12 @@ namespace LinqToDB.ServiceModel
 						{
 							var with        = Read<SqlWithClause>();
 							var table       = Read<SqlTable>();
+							var output      = Read<SqlOutputClause>();
 							var top         = Read<ISqlExpression>()!;
 							var selectQuery = Read<SelectQuery>();
 							var parameters  = ReadArray<SqlParameter>();
 
-							obj = _statement = new SqlDeleteStatement { Table = table, Top = top, SelectQuery = selectQuery };
+							obj = _statement = new SqlDeleteStatement { Table = table, Output = output, Top = top, SelectQuery = selectQuery };
 							_statement.Parameters.AddRange(parameters);
 							((SqlDeleteStatement)_statement).With = with;
 

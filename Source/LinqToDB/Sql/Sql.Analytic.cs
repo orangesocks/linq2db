@@ -11,7 +11,6 @@ namespace LinqToDB
 	using Expressions;
 
 	using PN = LinqToDB.ProviderName;
-	using System.Diagnostics.CodeAnalysis;
 
 	public static partial class Sql
 	{
@@ -47,7 +46,10 @@ namespace LinqToDB
 	[PublicAPI]
 	public static class AnalyticFunctions
 	{
-		const string FunctionToken  = "function";
+		/// <summary>
+		/// Token name for analytic function. Used for resolving method chain.
+		/// </summary>
+		public const string FunctionToken  = "function";
 
 		#region Call Builders
 
@@ -176,52 +178,52 @@ namespace LinqToDB
 		public interface INeedOrderByAndMaybeOverWithPartition<out TR>
 		{
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr}", TokenName = "order_item")]
-			IOrderedAcceptOverReadyToFunction<TR> OrderBy<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr}", TokenName = "order_item")]
+			IOrderedAcceptOverReadyToFunction<TR> OrderBy<TKey>([ExprParameter("order_expr")] TKey expr);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedAcceptOverReadyToFunction<TR> OrderBy<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedAcceptOverReadyToFunction<TR> OrderBy<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr} DESC", TokenName = "order_item")]
-			IOrderedAcceptOverReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item")]
+			IOrderedAcceptOverReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter("order_expr")] TKey expr);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedAcceptOverReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedAcceptOverReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 		}
 
 		public interface INeedSingleOrderByAndMaybeOverWithPartition<out TR>
 		{
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr}", TokenName = "order_item")]
-			IReadyToFunctionOrOverWithPartition<TR> OrderBy<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr}", TokenName = "order_item")]
+			IReadyToFunctionOrOverWithPartition<TR> OrderBy<TKey>([ExprParameter("order_expr")] TKey expr);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr} DESC", TokenName = "order_item")]
-			IReadyToFunctionOrOverWithPartition<TR> OrderByDesc<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item")]
+			IReadyToFunctionOrOverWithPartition<TR> OrderByDesc<TKey>([ExprParameter("order_expr")] TKey expr);
 		}
 
 		public interface IOrderedAcceptOverReadyToFunction<out TR> : IReadyToFunctionOrOverWithPartition<TR>
 		{
-			[Sql.Extension("{expr}", TokenName = "order_item")]
-			IOrderedAcceptOverReadyToFunction<TR> ThenBy<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr}", TokenName = "order_item")]
+			IOrderedAcceptOverReadyToFunction<TR> ThenBy<TKey>([ExprParameter("order_expr")] TKey expr);
 
-			[Sql.Extension("{expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedAcceptOverReadyToFunction<TR> ThenBy<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedAcceptOverReadyToFunction<TR> ThenBy<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 
-			[Sql.Extension("{expr} DESC", TokenName = "order_item")]
-			IOrderedAcceptOverReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item")]
+			IOrderedAcceptOverReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter("order_expr")] TKey expr);
 
-			[Sql.Extension("{expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedAcceptOverReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedAcceptOverReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 		}
 
 		public interface IOverMayHavePartition<out TR> : IReadyToFunction<TR>
 		{
-			[Sql.Extension("PARTITION BY {expr, ', '}", TokenName = "query_partition_clause")]
-			IReadyToFunction<TR> PartitionBy([ExprParameter("expr")] params object?[] expressions);
+			[Sql.Extension("PARTITION BY {partition_expr, ', '}", TokenName = "query_partition_clause")]
+			IReadyToFunction<TR> PartitionBy([ExprParameter("partition_expr")] params object?[] expressions);
 		}
 
 		public interface IPartitionedMayHaveOrder<out TR> : IReadyToFunction<TR>, INeedsOrderByOnly<TR>
@@ -230,8 +232,8 @@ namespace LinqToDB
 
 		public interface IOverMayHavePartitionAndOrder<out TR> : IReadyToFunction<TR>, INeedsOrderByOnly<TR>
 		{
-			[Sql.Extension("PARTITION BY {expr, ', '}", TokenName = "query_partition_clause")]
-			IPartitionedMayHaveOrder<TR> PartitionBy([ExprParameter("expr")] params object?[] expressions);
+			[Sql.Extension("PARTITION BY {partition_expr, ', '}", TokenName = "query_partition_clause")]
+			IPartitionedMayHaveOrder<TR> PartitionBy([ExprParameter("partition_expr")] params object?[] expressions);
 		}
 
 		public interface IAnalyticFunction<out TR>
@@ -252,17 +254,17 @@ namespace LinqToDB
 
 		public interface IOrderedReadyToFunction<out TR> : IReadyToFunction<TR>
 		{
-			[Sql.Extension("{expr}", TokenName = "order_item")]
-			IOrderedReadyToFunction<TR> ThenBy<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr}", TokenName = "order_item")]
+			IOrderedReadyToFunction<TR> ThenBy<TKey>([ExprParameter("order_expr")] TKey expr);
 
-			[Sql.Extension("{expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToFunction<TR> ThenBy<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToFunction<TR> ThenBy<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 
-			[Sql.Extension("{expr} DESC", TokenName = "order_item")]
-			IOrderedReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item")]
+			IOrderedReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter("order_expr")] TKey expr);
 
-			[Sql.Extension("{expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToFunction<TR> ThenByDesc<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 		}
 
 		public interface INeedsWithinGroupWithOrderOnly<out TR>
@@ -286,20 +288,20 @@ namespace LinqToDB
 		public interface INeedsOrderByOnly<out TR>
 		{
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr}", TokenName = "order_item")]
-			IOrderedReadyToFunction<TR> OrderBy<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr}", TokenName = "order_item")]
+			IOrderedReadyToFunction<TR> OrderBy<TKey>([ExprParameter("order_expr")] TKey expr);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToFunction<TR> OrderBy<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToFunction<TR> OrderBy<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr} DESC", TokenName = "order_item")]
-			IOrderedReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item")]
+			IOrderedReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter("order_expr")] TKey expr);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToFunction<TR> OrderByDesc<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 		}
 
 		#region Full Support
@@ -307,26 +309,26 @@ namespace LinqToDB
 		public interface IReadyForSortingWithWindow<out TR>
 		{
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr}", TokenName = "order_item")]
-			IOrderedReadyToWindowing<TR> OrderBy<TKey>([ExprParameter("expr")] TKey keySelector);
+			[Sql.Extension("{order_expr}", TokenName = "order_item")]
+			IOrderedReadyToWindowing<TR> OrderBy<TKey>([ExprParameter("order_expr")] TKey expr);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToWindowing<TR> OrderBy<TKey>([ExprParameter("expr")] TKey keySelector, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToWindowing<TR> OrderBy<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr} DESC", TokenName = "order_item")]
-			IOrderedReadyToWindowing<TR> OrderByDesc<TKey>([ExprParameter("expr")] TKey keySelector);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item")]
+			IOrderedReadyToWindowing<TR> OrderByDesc<TKey>([ExprParameter("order_expr")] TKey expr);
 
 			[Sql.Extension("ORDER BY {order_item, ', '}", TokenName = "order_by_clause")]
-			[Sql.Extension("{expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToWindowing<TR> OrderByDesc<TKey>([ExprParameter("expr")] TKey keySelector, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToWindowing<TR> OrderByDesc<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 		}
 
 		public interface IReadyForFullAnalyticClause<out TR> : IReadyToFunction<TR>, IReadyForSortingWithWindow<TR>
 		{
-			[Sql.Extension("PARTITION BY {expr, ', '}", TokenName = "query_partition_clause")]
-			IPartitionDefinedReadyForSortingWithWindow<TR> PartitionBy([ExprParameter("expr")] params object?[] expressions);
+			[Sql.Extension("PARTITION BY {partition_expr, ', '}", TokenName = "query_partition_clause")]
+			IPartitionDefinedReadyForSortingWithWindow<TR> PartitionBy([ExprParameter("partition_expr")] params object?[] expressions);
 		}
 
 		public interface IPartitionDefinedReadyForSortingWithWindow<out TR> : IReadyForSortingWithWindow<TR>, IReadyToFunction<TR>
@@ -341,17 +343,17 @@ namespace LinqToDB
 			[Sql.Extension("RANGE {boundary_clause}", TokenName = "windowing_clause")]
 			IBoundaryExpected<TR> Range { get; }
 
-			[Sql.Extension("{expr}", TokenName = "order_item")]
-			IOrderedReadyToWindowing<TR> ThenBy<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr}", TokenName = "order_item")]
+			IOrderedReadyToWindowing<TR> ThenBy<TKey>([ExprParameter("order_expr")] TKey expr);
 
-			[Sql.Extension("{expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToWindowing<TR> ThenBy<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr}", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToWindowing<TR> ThenBy<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 
-			[Sql.Extension("{expr} DESC", TokenName = "order_item")]
-			IOrderedReadyToWindowing<TR> ThenByDesc<TKey>([ExprParameter] TKey expr);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item")]
+			IOrderedReadyToWindowing<TR> ThenByDesc<TKey>([ExprParameter("order_expr")] TKey expr);
 
-			[Sql.Extension("{expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
-			IOrderedReadyToWindowing<TR> ThenByDesc<TKey>([ExprParameter] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
+			[Sql.Extension("{order_expr} DESC", TokenName = "order_item", BuilderType = typeof(OrderItemBuilder))]
+			IOrderedReadyToWindowing<TR> ThenByDesc<TKey>([ExprParameter("order_expr")] TKey expr, [SqlQueryDependent] Sql.NullsPosition nulls);
 		}
 
 		public interface IBoundaryExpected<out TR>
@@ -405,6 +407,17 @@ namespace LinqToDB
 		#endregion Full Support
 
 		#endregion API Interfaces
+
+		#region Extensions
+
+		[Sql.Extension("{function} FILTER (WHERE {filter})", TokenName = FunctionToken, ChainPrecedence = 2, IsAggregate = true)]
+		public static IAnalyticFunctionWithoutWindow<T> Filter<T>(this IAnalyticFunctionWithoutWindow<T> func, 
+			[ExprParameter] bool filter)
+		{
+			throw new LinqException($"'{nameof(Filter)}' is server-side method.");
+		}
+
+		#endregion
 
 		#region Analytic functions
 
@@ -496,6 +509,22 @@ namespace LinqToDB
 			throw new LinqException($"'{nameof(CountExt)}' is server-side method.");
 		}
 
+		[Sql.Extension("COUNT({modifier?}{_}{expr})", IsAggregate = true, ChainPrecedence = 0)]
+		public static int CountExt<TEntity, TV>(this IQueryable<TEntity> source, [ExprParameter] Expression<Func<TEntity, TV>> expr)
+		{
+			if (source == null) throw new ArgumentNullException(nameof(source));
+			if (expr   == null) throw new ArgumentNullException(nameof(expr));
+
+			var currentSource = LinqExtensions.ProcessSourceQueryable?.Invoke(source) ?? source;
+
+			return currentSource.Provider.Execute<int>(
+				Expression.Call(
+					null,
+					MethodHelper.GetMethodInfo(AnalyticFunctions.CountExt, source, expr),
+					currentSource.Expression, Expression.Quote(expr))
+				);
+		}
+
 		[Sql.Extension("COUNT({modifier?}{_}{expr})", BuilderType = typeof(ApplyAggregateModifier), IsAggregate = true, ChainPrecedence = 0)]
 		public static int CountExt<TEntity, TV>(this IQueryable<TEntity> source, [ExprParameter] Expression<Func<TEntity, TV>> expr, [SqlQueryDependent] Sql.AggregateModifier modifier = Sql.AggregateModifier.None)
 		{
@@ -528,6 +557,56 @@ namespace LinqToDB
 		public static IAggregateFunctionSelfContained<int> Count(this Sql.ISqlExtension? ext, [ExprParameter] object? expr, [SqlQueryDependent] Sql.AggregateModifier modifier)
 		{
 			throw new LinqException($"'{nameof(Count)}' is server-side method.");
+		}
+
+		#endregion
+
+		#region LongCount
+
+		[Sql.Extension("COUNT({expr})", IsAggregate = true, ChainPrecedence = 0)]
+		public static long LongCountExt<TEntity>(this IEnumerable<TEntity> source, [ExprParameter] Func<TEntity, object?> expr)
+		{
+			throw new LinqException($"'{nameof(LongCountExt)}' is server-side method.");
+		}
+
+		[Sql.Extension("COUNT({modifier?}{_}{expr})", BuilderType = typeof(ApplyAggregateModifier), IsAggregate = true, ChainPrecedence = 0)]
+		public static long LongCountExt<TEntity, TV>(this IEnumerable<TEntity> source, [ExprParameter] Func<TEntity, TV> expr, [SqlQueryDependent] Sql.AggregateModifier modifier)
+		{
+			throw new LinqException($"'{nameof(LongCountExt)}' is server-side method.");
+		}
+
+		[Sql.Extension("COUNT({modifier?}{_}{expr})", BuilderType = typeof(ApplyAggregateModifier), IsAggregate = true, ChainPrecedence = 0)]
+		public static long LongCountExt<TEntity, TV>(this IQueryable<TEntity> source, [ExprParameter] Expression<Func<TEntity, TV>> expr, [SqlQueryDependent] Sql.AggregateModifier modifier = Sql.AggregateModifier.None)
+		{
+			if (source == null) throw new ArgumentNullException(nameof(source));
+			if (expr   == null) throw new ArgumentNullException(nameof(expr));
+
+			var currentSource = LinqExtensions.ProcessSourceQueryable?.Invoke(source) ?? source;
+
+			return currentSource.Provider.Execute<long>(
+				Expression.Call(
+					null,
+					MethodHelper.GetMethodInfo(AnalyticFunctions.LongCountExt, source, expr, modifier),
+					currentSource.Expression, Expression.Quote(expr), Expression.Constant(modifier)
+				));
+		}
+
+		[Sql.Extension("COUNT(*)", TokenName = FunctionToken, ChainPrecedence = 1, IsAggregate = true)]
+		public static IAggregateFunctionSelfContained<long> LongCount(this Sql.ISqlExtension? ext)
+		{
+			throw new LinqException($"'{nameof(LongCount)}' is server-side method.");
+		}
+
+		[Sql.Extension("COUNT({expr})", TokenName = FunctionToken, ChainPrecedence = 1, IsAggregate = true)]
+		public static IAggregateFunctionSelfContained<long> LongCount<T>(this Sql.ISqlExtension? ext, [ExprParameter] T expr)
+		{
+			throw new LinqException($"'{nameof(LongCount)}' is server-side method.");
+		}
+
+		[Sql.Extension("COUNT({modifier?}{_}{expr})", BuilderType = typeof(ApplyAggregateModifier), TokenName = FunctionToken, ChainPrecedence = 1, IsAggregate = true)]
+		public static IAggregateFunctionSelfContained<long> LongCount(this Sql.ISqlExtension? ext, [ExprParameter] object? expr, [SqlQueryDependent] Sql.AggregateModifier modifier)
+		{
+			throw new LinqException($"'{nameof(LongCount)}' is server-side method.");
 		}
 
 		#endregion

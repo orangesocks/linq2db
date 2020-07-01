@@ -197,6 +197,9 @@ namespace LinqToDB.ServiceModel
 							case QueryType.Insert:
 								select = ((SqlInsertStatement)query.Statement).Output!.OutputQuery!;
 								break;
+							case QueryType.Delete:
+								select = ((SqlDeleteStatement)query.Statement).Output!.OutputQuery!;
+								break;
 							default:
 								throw new NotImplementedException($"Query type not supported: {query.Statement.QueryType}");
 						}
@@ -228,7 +231,8 @@ namespace LinqToDB.ServiceModel
 						var columnReaders = new ConvertFromDataReaderExpression.ColumnReader[rd.FieldCount];
 
 						for (var i = 0; i < ret.FieldCount; i++)
-							columnReaders[i] = new ConvertFromDataReaderExpression.ColumnReader(db, db.MappingSchema, ret.FieldTypes[i], i);
+							columnReaders[i] = new ConvertFromDataReaderExpression.ColumnReader(db, db.MappingSchema,
+								ret.FieldTypes[i], i, QueryHelper.GetValueConverter(select.Select.Columns[i]));
 
 						while (rd.Read())
 						{

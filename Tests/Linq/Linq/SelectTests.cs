@@ -8,6 +8,7 @@ using System.Windows.Forms;
 
 using LinqToDB;
 using LinqToDB.Data;
+using LinqToDB.Extensions;
 using LinqToDB.Reflection;
 using LinqToDB.Mapping;
 using LinqToDB.SqlQuery;
@@ -218,7 +219,7 @@ namespace Tests.Linq
 
 		// ProviderName.SqlServer2014 disabled due to:
 		// https://connect.microsoft.com/SQLServer/feedback/details/3139577/performace-regression-for-compatibility-level-2014-for-specific-query
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void MultipleSelect11([IncludeDataSources(
 			ProviderName.SqlServer2008, ProviderName.SqlServer2012, TestProvName.AllSapHana)]
 			string context)
@@ -550,24 +551,6 @@ namespace Tests.Linq
 			public string? FirstName = null!;
 		}
 
-		[ActiveIssue(
-			Configurations = new[]
-			{
-				TestProvName.AllAccess,
-				ProviderName.DB2,
-				TestProvName.AllFirebird,
-				TestProvName.AllInformix,
-				TestProvName.AllMySql,
-				TestProvName.AllOracle,
-				TestProvName.AllPostgreSQL,
-				TestProvName.AllSQLite,
-				TestProvName.AllSapHana,
-				ProviderName.SqlCe,
-				TestProvName.AllSqlServer,
-				TestProvName.AllSybase
-			},
-			SkipForNonLinqService = true,
-			Details = "SELECT * query")]
 		[Test]
 		public void ObjectFactoryTest([DataSources] string context)
 		{
@@ -716,7 +699,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void SelectNullableTest2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -739,7 +722,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void SelectNullPropagationTest([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -760,7 +743,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void SelectNullPropagationWhereTest([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -816,7 +799,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void SelectNullProjectionTest([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -837,7 +820,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void SelectReverseNullPropagationTest([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -858,7 +841,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void SelectReverseNullPropagationWhereTest([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
@@ -1420,8 +1403,6 @@ namespace Tests.Linq
 		[Test]
 		public void OuterApplyTest([IncludeDataSources(TestProvName.AllPostgreSQL95Plus, TestProvName.AllSqlServer2008Plus, TestProvName.AllOracle12)] string context)
 		{
-			// TODO: eager loading
-			// using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 			{
 				var query =
@@ -1434,12 +1415,15 @@ namespace Tests.Linq
 						Child = c1,
 						Any = children.Any(),
 						Child1 = children.Where(c => c.ParentID >= p.ParentID).FirstOrDefault(),
-						Child2 = children.Where(c => c.ParentID >= 2).Select(c => new { c.ChildID, c.ParentID }).FirstOrDefault()
+						Child2 = children.Where(c => c.ParentID >= 2).Select(c => new { c.ChildID, c.ParentID }).FirstOrDefault(),
+						ChildArray = children.Where(c => c.ParentID >= p.ParentID).Select(c => new object[] {c.ChildID, c.ParentID}).FirstOrDefault(),
+						ChildDictionary1 = children.Where(c => c.ParentID >= p.ParentID).Select(c => new Dictionary<int, int?>{{c.ChildID, c.ParentID}}).FirstOrDefault(),
+						ChildDictionary2 = children.Where(c => c.ParentID >= p.ParentID).Select(c => new Dictionary<string, int?>{{"ChildID", c.ChildID}, {"ParentID", c.ParentID}}).FirstOrDefault()
 					};
 
 				query = query
-					.Distinct()
-					.OrderBy(_ => _.Parent.ParentID);
+				 	.Distinct()
+				 	.OrderBy(_ => _.Parent.ParentID);
 
 
 				var expectedQuery = 
@@ -1452,17 +1436,31 @@ namespace Tests.Linq
 						Child = c1,
 						Any = children.Any(),
 						Child1 = children.Where(c => c.ParentID >= p.ParentID).FirstOrDefault(),
-						Child2 = children.Where(c => c.ParentID >= 2).Select(c => new { c.ChildID, c.ParentID }).FirstOrDefault()
+						Child2 = children.Where(c => c.ParentID >= 2).Select(c => new { c.ChildID, c.ParentID }).FirstOrDefault(),
+						ChildArray = children.Where(c => c.ParentID >= p.ParentID).Select(c => new object[] {c.ChildID, c.ParentID}).FirstOrDefault(),
+						ChildDictionary1 = children.Where(c => c.ParentID >= p.ParentID).Select(c => new Dictionary<int, int?>{{c.ChildID, c.ParentID}}).FirstOrDefault(),
+						ChildDictionary2 = children.Where(c => c.ParentID >= p.ParentID).Select(c => new Dictionary<string, int?>{{"ChildID", c.ChildID}, {"ParentID", c.ParentID}}).FirstOrDefault()
 					};
 
 				var actual = query.ToArray();
 
-				var expected = expectedQuery
-					.Distinct()
-					.OrderBy(_ => _.Parent.ParentID)
-					.ToArray();
+				 var expected = expectedQuery
+				 	.Distinct()
+				 	.OrderBy(_ => _.Parent.ParentID)
+				 	.ToArray();
 
-				AreEqual(expected, actual);
+				AreEqualWithComparer(expected, actual, m => !typeof(Dictionary<,>).IsSameOrParentOf(m.MemberInfo.GetMemberType()));
+
+				for (int i = 0; i < actual.Length; i++)
+				{
+					var item = actual[i];
+					if (item.Child1 != null)
+					{
+						Assert.That(item.ChildDictionary1[item.Child1.ChildID], Is.EqualTo(item.Child1.ParentID));
+						Assert.That(item.ChildDictionary2["ChildID"],           Is.EqualTo(item.Child1.ChildID));
+						Assert.That(item.ChildDictionary2["ParentID"],          Is.EqualTo(item.Child1.ParentID));
+					}
+				}
 			}
 		}
 		
@@ -1533,7 +1531,6 @@ namespace Tests.Linq
 			}
 		}
 
-		[ActiveIssue(SkipForNonLinqService = true, Details = "SELECT * query")]
 		[Test]
 		public void SelectExpression3([DataSources] string context)
 		{
@@ -1546,7 +1543,6 @@ namespace Tests.Linq
 			}
 		}
 
-		[ActiveIssue(SkipForNonLinqService = true, Details = "SELECT * query")]
 		[Test]
 		public void SelectExpression4([DataSources] string context)
 		{
@@ -1557,7 +1553,6 @@ namespace Tests.Linq
 			}
 		}
 
-		[ActiveIssue(SkipForNonLinqService = true, Details = "SELECT * query")]
 		[Test]
 		public void SelectExpression5([DataSources] string context)
 		{

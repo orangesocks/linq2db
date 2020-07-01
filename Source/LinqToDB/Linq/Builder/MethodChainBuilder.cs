@@ -3,6 +3,7 @@ using System.Data;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
+using LinqToDB.Common;
 using LinqToDB.Extensions;
 using LinqToDB.SqlQuery;
 
@@ -31,12 +32,14 @@ namespace LinqToDB.Linq.Builder
 				root = root.SkipMethodChain(builder.MappingSchema);
 			}
 
+			root = builder.ConvertExpressionTree(root);
+
 			var sequence = builder.BuildSequence(new BuildInfo(buildInfo, root) { CreateSubQuery = true });
 
 			var finalFunction = functions.First();
 				
 			var sqlExpression = finalFunction.GetExpression(builder.DataContext, buildInfo.SelectQuery, methodCall,
-				e => builder.ConvertToExtensionSql(sequence, e));
+				(e, descriptor) => builder.ConvertToExtensionSql(sequence, e, descriptor));
 
 			var context = new ChainContext(buildInfo.Parent, sequence, methodCall);
 			context.Sql        = context.SelectQuery;
@@ -83,7 +86,7 @@ namespace LinqToDB.Linq.Builder
 
 			public override void BuildQuery<T>(Query<T> query, ParameterExpression queryParameter)
 			{
-				var expr   = BuildExpression(FieldIndex);
+				var expr   = BuildExpression(FieldIndex, Sql);
 				var mapper = Builder.BuildMapper<object>(expr);
 
 				QueryRunner.SetRunQuery(query, mapper);
@@ -91,25 +94,26 @@ namespace LinqToDB.Linq.Builder
 
 			public override Expression BuildExpression(Expression? expression, int level, bool enforceServerSide)
 			{
-				var index = ConvertToIndex(expression, level, ConvertFlags.Field)[0].Index;
+				var info  = ConvertToIndex(expression, level, ConvertFlags.Field)[0];
+				var index = info.Index;
 				if (Parent != null)
 					index = ConvertToParentIndex(index, Parent);
-				return BuildExpression(index);
+				return BuildExpression(index, info.Sql);
 			}
 
-			Expression BuildExpression(int fieldIndex)
+			Expression BuildExpression(int fieldIndex, ISqlExpression? sqlExpression)
 			{
 				Expression expr;
 
 				if (_returnType.IsClass || _returnType.IsNullable())
 				{
-					expr = Builder.BuildSql(_returnType, fieldIndex);
+					expr = Builder.BuildSql(_returnType, fieldIndex, sqlExpression);
 				}
 				else
 				{
 					expr = Expression.Block(
 						Expression.Call(null, MemberHelper.MethodOf(() => CheckNullValue(null!, null!)), ExpressionBuilder.DataReaderParam, Expression.Constant(_methodName)),
-						Builder.BuildSql(_returnType, fieldIndex));
+						Builder.BuildSql(_returnType, fieldIndex, sqlExpression));
 				}
 
 				return expr;
@@ -132,10 +136,10 @@ namespace LinqToDB.Linq.Builder
 				switch (flags)
 				{
 					case ConvertFlags.Field :
-						return _index ?? (_index = new[]
+						return _index ??= new[]
 						{
-							new SqlInfo { Query = Parent!.SelectQuery, Index = Parent.SelectQuery.Select.Add(Sql!), Sql = Sql!, }
-						});
+							new SqlInfo(Sql!, Parent!.SelectQuery, Parent.SelectQuery.Select.Add(Sql!))
+						};
 				}
 
 				throw new InvalidOperationException();

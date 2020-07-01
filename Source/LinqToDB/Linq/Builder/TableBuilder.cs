@@ -23,7 +23,8 @@ namespace LinqToDB.Linq.Builder
 			TableFunctionAttribute,
 			AsCteMethod,
 			CteConstant,
-			FromSqlMethod
+			FromSqlMethod,
+			FromSqlScalarMethod
 		}
 
 		static BuildContextType FindBuildContext(ExpressionBuilder builder, BuildInfo buildInfo, out IBuildContext? parentContext)
@@ -75,6 +76,8 @@ namespace LinqToDB.Linq.Builder
 
 							case "FromSql":
 								return BuildContextType.FromSqlMethod;
+							case "FromSqlScalar":
+								return BuildContextType.FromSqlScalarMethod;
 						}
 
 						var attr = builder.GetTableFunctionAttribute(mc.Method);
@@ -149,13 +152,12 @@ namespace LinqToDB.Linq.Builder
 
 			// Here we tell for Equality Comparer to compare optimized expressions 
 			//
-			var closureMappingSchema = builder.MappingSchema;
-			builder.AddQueryableMemberAccessors(memberInfo, mi =>
+			builder.AddQueryableMemberAccessors(new AccessorMember(memberInfo), builder.DataContext, (mi, dc) =>
 			{
-				var filtered      = (IQueryable)filterFunc.DynamicInvoke(fakeQuery, builder.DataContext);
+				var filtered      = (IQueryable)filterFunc.DynamicInvoke(fakeQuery, dc);
 
 				// here we use light version of optimization, only for comparing trees
-				var optimizationContext = new ExpressionTreeOptimizationContext(closureMappingSchema);
+				var optimizationContext = new ExpressionTreeOptimizationContext(dc);
 				var optimizedExpr = optimizationContext.ExposeExpression(filtered.Expression);
 				    optimizedExpr = optimizationContext.ExpandQueryableMethods(optimizedExpr);
 				    optimizedExpr = optimizedExpr.OptimizeExpression()!;
@@ -202,7 +204,8 @@ namespace LinqToDB.Linq.Builder
 				case BuildContextType.TableFunctionAttribute : return new TableContext    (builder, buildInfo);
 				case BuildContextType.AsCteMethod            : return BuildCteContext     (builder, buildInfo);
 				case BuildContextType.CteConstant            : return BuildCteContextTable(builder, buildInfo);
-				case BuildContextType.FromSqlMethod          : return BuildRawSqlTable(builder, buildInfo);
+				case BuildContextType.FromSqlMethod          : return BuildRawSqlTable(builder, buildInfo, false);
+				case BuildContextType.FromSqlScalarMethod    : return BuildRawSqlTable(builder, buildInfo, true);
 			}
 
 			throw new InvalidOperationException();

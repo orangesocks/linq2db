@@ -8,6 +8,7 @@ using JetBrains.Annotations;
 
 namespace LinqToDB
 {
+	using Mapping;
 	using Extensions;
 	using SqlQuery;
 
@@ -32,6 +33,7 @@ namespace LinqToDB
 			{
 				Expression = expression;
 				Precedence = SqlQuery.Precedence.Primary;
+				IsPure     = true;
 			}
 
 			/// <summary>
@@ -46,6 +48,7 @@ namespace LinqToDB
 				Expression = expression;
 				ArgIndices = argIndices;
 				Precedence = SqlQuery.Precedence.Primary;
+				IsPure     = true;
 			}
 
 			/// <summary>
@@ -60,6 +63,7 @@ namespace LinqToDB
 				Configuration = configuration;
 				Expression    = expression;
 				Precedence    = SqlQuery.Precedence.Primary;
+				IsPure        = true;
 			}
 
 			/// <summary>
@@ -77,6 +81,7 @@ namespace LinqToDB
 				Expression    = expression;
 				ArgIndices    = argIndices;
 				Precedence    = SqlQuery.Precedence.Primary;
+				IsPure        = true;
 			}
 
 			/// <summary>
@@ -129,6 +134,16 @@ namespace LinqToDB
 			/// Examples would be SUM(),COUNT().
 			/// </summary>
 			public bool           IsAggregate      { get; set; }
+			/// <summary>
+			/// If <c>true</c>, it notifies SQL Optimizer that expression returns same result if the same values/parameters are used. It gives optimizer additional information how to simplify query.
+			/// For example ORDER BY PureFunction("Str") can be removed because PureFunction function uses constant value.
+			/// <example>
+			/// For example Random function is NOT Pure function because it returns different result all time.
+			/// But expression <see cref="Sql.CurrentTimestamp"/> is Pure in case of executed query.
+			/// <see cref="Sql.DateAdd(LinqToDB.Sql.DateParts,System.Nullable{double},System.Nullable{System.DateTime})"/> is also Pure function because it returns the same result with the same parameters.  
+			/// </example>
+			/// </summary>
+			public bool           IsPure          { get; set; }
 			/// <summary>
 			/// Used to determine whether the return type should be treated as
 			/// something that can be null If CanBeNull is not explicitly set.
@@ -214,14 +229,14 @@ namespace LinqToDB
 				var sqlExpressions = ConvertArgs(member, args);
 
 				return new SqlExpression(member.GetMemberType(), Expression ?? member.Name, Precedence,
-					IsAggregate, sqlExpressions)
+					IsAggregate, IsPure, sqlExpressions)
 				{
 					CanBeNull = GetCanBeNull(sqlExpressions)
 				};
 			}
 
 			public virtual ISqlExpression? GetExpression(IDataContext dataContext, SelectQuery query,
-				Expression expression, Func<Expression, ISqlExpression> converter)
+				Expression expression, Func<Expression, ColumnDescriptor?, ISqlExpression> converter)
 			{
 				return null;
 			}

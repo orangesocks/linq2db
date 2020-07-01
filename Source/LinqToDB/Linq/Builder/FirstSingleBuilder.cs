@@ -211,8 +211,20 @@ namespace LinqToDB.Linq.Builder
 			{
 				if (_checkNullIndex < 0)
 				{
-					_checkNullIndex = SelectQuery.Select.Add(new SqlValue(1));
-					SelectQuery.Select.Columns[_checkNullIndex].RawAlias = "is_empty";
+					//TODO: Check maybe we have to use DefaultIfEmptyContext
+					var q =
+						from col in SelectQuery.Select.Columns
+						where !col.CanBeNull
+						select SelectQuery.Select.Columns.IndexOf(col);
+
+					_checkNullIndex = q.DefaultIfEmpty(-1).First();
+
+					if (_checkNullIndex < 0)
+					{
+						_checkNullIndex = SelectQuery.Select.Add(new SqlValue(1));
+						SelectQuery.Select.Columns[_checkNullIndex].RawAlias = "is_empty";
+					}
+
 					_checkNullIndex = ConvertToParentIndex(_checkNullIndex, this);
 				}
 
@@ -263,7 +275,7 @@ namespace LinqToDB.Linq.Builder
 
 						var idx = Parent!.SelectQuery.Select.Add(SelectQuery);
 						    idx = Parent.ConvertToParentIndex(idx, Parent);
-						return Builder.BuildSql(_methodCall.Type, idx);
+						return Builder.BuildSql(_methodCall.Type, idx, SelectQuery);
 					}
 
 					return null!; // ???

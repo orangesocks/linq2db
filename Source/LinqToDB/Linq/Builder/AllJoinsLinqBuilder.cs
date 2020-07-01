@@ -122,7 +122,7 @@ namespace LinqToDB.Linq.Builder
 
 				if (expression != null)
 				{
-					var root = expression.GetRootObject(Builder.MappingSchema);
+					var root = Builder.GetRootObject(expression);
 
 					if (root.NodeType == ExpressionType.Parameter && root == Lambda.Parameters[1])
 					{
@@ -132,12 +132,7 @@ namespace LinqToDB.Linq.Builder
 						result = result.Select(s =>
 							{
 								var idx = InnerContext.SelectQuery.Select.Add(s.Sql);
-								return new SqlInfo(s.MemberChain)
-								{
-									Index = idx, 
-									Sql   = InnerContext.SelectQuery.Select.Columns[idx],
-									Query = InnerContext.SelectQuery
-								};
+								return new SqlInfo(s.MemberChain, InnerContext.SelectQuery.Select.Columns[idx], InnerContext.SelectQuery, idx);
 							})
 							.ToArray();
 					}

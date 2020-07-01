@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 
@@ -7,7 +8,7 @@ namespace LinqToDB.SqlQuery
 {
 	public class SqlExpression : ISqlExpression
 	{
-		public SqlExpression(Type? systemType, string expr, int precedence, bool isAggregate, params ISqlExpression[] parameters)
+		public SqlExpression(Type? systemType, string expr, int precedence, bool isAggregate, bool isPure, params ISqlExpression[] parameters)
 		{
 			if (parameters == null) throw new ArgumentNullException(nameof(parameters));
 
@@ -19,10 +20,11 @@ namespace LinqToDB.SqlQuery
 			Precedence  = precedence;
 			Parameters  = parameters;
 			IsAggregate = isAggregate;
+			IsPure      = isPure;
 		}
 
 		public SqlExpression(Type? systemType, string expr, int precedence, params ISqlExpression[] parameters)
-			: this(systemType, expr, precedence, false, parameters)
+			: this(systemType, expr, precedence, false, true, parameters)
 		{
 		}
 
@@ -46,6 +48,7 @@ namespace LinqToDB.SqlQuery
 		public int              Precedence  { get; }
 		public ISqlExpression[] Parameters  { get; }
 		public bool             IsAggregate { get; }
+		public bool             IsPure      { get; }
 
 		#region Overrides
 
@@ -103,8 +106,14 @@ namespace LinqToDB.SqlQuery
 
 		internal static Func<ISqlExpression,ISqlExpression,bool> DefaultComparer = (x, y) => true;
 
+		int? _hashCode;
+
+		[SuppressMessage("ReSharper", "NonReadonlyMemberInGetHashCode")]
 		public override int GetHashCode()
 		{
+			if (_hashCode != null)
+				return _hashCode.Value;
+
 			var hashCode = Expr.GetHashCode();
 
 			if (SystemType != null)
@@ -112,6 +121,8 @@ namespace LinqToDB.SqlQuery
 
 			for (var i = 0; i < Parameters.Length; i++)
 				hashCode = unchecked(hashCode + (hashCode * 397) ^ Parameters[i].GetHashCode());
+
+			_hashCode = hashCode;
 
 			return hashCode;
 		}
