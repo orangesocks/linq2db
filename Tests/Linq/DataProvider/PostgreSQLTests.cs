@@ -1346,21 +1346,21 @@ namespace Tests.DataProvider
 			using (var db = (DataConnection)GetDataContext(context))
 			using (var table = db.CreateLocalTable<NpgsqlTableWithDateRanges>())
 			{
-				var date = DateTime.Now;
-
-				var items = Enumerable.Range(1, 100).Select(i =>
-				{
-					var range1 = new NpgsqlRange<DateTime>(new DateTime(2000 + i, 2, 3), new DateTime(2000 + i, 3, 3));
-					var range2 = new NpgsqlRange<DateTime>(new DateTime(2000 + i, 2, 3, 4, 5, 6), new DateTime(2000 + i, 4, 3, 4, 5, 6));
-					var range3 = new NpgsqlRange<DateTime>(new DateTime(2000 + i, 4, 3, 4, 5, 6), new DateTime(2000 + i, 5, 3, 4, 5, 6));
-					return new NpgsqlTableWithDateRanges
+				var items = Enumerable.Range(1, 100)
+					.Select(i =>
 					{
-						Id        = i,
-						DateRange = range1,
-						TSRange   = range2,
-						TSTZRange = range3,
-					};
-				});
+						var range1 = new NpgsqlRange<DateTime>(new DateTime(2000 + i, 2, 3), new DateTime(2000 + i, 3, 3));
+						var range2 = new NpgsqlRange<DateTime>(new DateTime(2000 + i, 2, 3, 4, 5, 6), new DateTime(2000 + i, 4, 3, 4, 5, 6));
+						var range3 = new NpgsqlRange<DateTime>(new DateTime(2000 + i, 4, 3, 4, 5, 6), new DateTime(2000 + i, 5, 3, 4, 5, 6));
+						return new NpgsqlTableWithDateRanges
+						{
+							Id        = i,
+							DateRange = range1,
+							TSRange   = range2,
+							TSTZRange = range3,
+						};
+					})
+					.ToArray();
 
 				db.BulkCopy(items);
 
@@ -1368,15 +1368,20 @@ namespace Tests.DataProvider
 
 				Assert.AreEqual(100, records.Length);
 
-				var cnt = 1;
-				foreach (var record in records)
-				{
-					Assert.AreEqual(cnt, record.Id);
-					Assert.AreEqual(new NpgsqlRange<DateTime>(new DateTime(2000 + cnt, 2, 3), true, new DateTime(2000 + cnt, 3, 4), false), record.DateRange);
-					Assert.AreEqual(new NpgsqlRange<DateTime>(new DateTime(2000 + cnt, 2, 3, 4, 5, 6), new DateTime(2000 + cnt, 4, 3, 4, 5, 6)), record.TSRange);
-					Assert.AreEqual(new NpgsqlRange<DateTime>(new DateTime(2000 + cnt, 4, 3, 4, 5, 6).Add(TimeZoneInfo.Local.GetUtcOffset(new DateTime(2000 + cnt, 5, 3, 4, 5, 6))), new DateTime(2000 + cnt, 5, 3, 4, 5, 6).Add(TimeZoneInfo.Local.GetUtcOffset(new DateTime(2000 + cnt, 5, 3, 4, 5, 6)))), record.TSTZRange);
-					cnt++;
-				}
+				AreEqual(
+					items.Select(t => new
+					{
+						t.Id,
+						t.DateRange,
+						t.TSRange,
+						TSTZRange =
+							new NpgsqlRange<DateTime>(
+								new DateTime(2000 + t.Id, 4, 3, 4, 5, 6)
+									.Add(TimeZoneInfo.Local.GetUtcOffset(new DateTime(2000 + t.Id, 5, 3, 4, 5, 6))),
+								new DateTime(2000 + t.Id, 5, 3, 4, 5, 6)
+									.Add(TimeZoneInfo.Local.GetUtcOffset(new DateTime(2000 + t.Id, 5, 3, 4, 5, 6))))
+					}),
+					records.Select(t => new { t.Id, t.DateRange, t.TSRange, t.TSTZRange }));
 			}
 		}
 
@@ -1643,7 +1648,7 @@ namespace Tests.DataProvider
 		[Sql.TableFunction("\"TestTableFunctionSchema\"")]
 		public LinqToDB.ITable<PostgreSQLTests.AllTypes> GetAllTypes()
 		{
-			var methodInfo = typeof(TestPgFunctions).GetMethod("GetAllTypes", new Type[0]);
+			var methodInfo = typeof(TestPgFunctions).GetMethod("GetAllTypes", new Type[0])!;
 
 			return _ctx.GetTable<PostgreSQLTests.AllTypes>(this, methodInfo);
 		}
@@ -1657,7 +1662,7 @@ namespace Tests.DataProvider
 		[Sql.TableFunction("\"TestTableFunction\"")]
 		public LinqToDB.ITable<TestScalarTableFunctionResult> TestScalarTableFunction(int? param1)
 		{
-			var methodInfo = typeof(TestPgFunctions).GetMethod("TestScalarTableFunction", new[] { typeof(int?) });
+			var methodInfo = typeof(TestPgFunctions).GetMethod("TestScalarTableFunction", new[] { typeof(int?) })!;
 
 			return _ctx.GetTable<TestScalarTableFunctionResult>(this, methodInfo, param1);
 		}
@@ -1665,7 +1670,7 @@ namespace Tests.DataProvider
 		[Sql.TableFunction("\"TestTableFunction1\"")]
 		public LinqToDB.ITable<TestRecordTableFunctionResult> TestRecordTableFunction(int? param1, int? param2)
 		{
-			var methodInfo = typeof(TestPgFunctions).GetMethod("TestRecordTableFunction", new[] { typeof(int?), typeof(int?) });
+			var methodInfo = typeof(TestPgFunctions).GetMethod("TestRecordTableFunction", new[] { typeof(int?), typeof(int?) })!;
 
 			return _ctx.GetTable<TestRecordTableFunctionResult>(this, methodInfo, param1, param2);
 		}
@@ -1692,7 +1697,7 @@ namespace Tests.DataProvider
 		public LinqToDB.ITable<TRecord> DynamicTableFunction<TRecord>(string json)
 			where TRecord : class
 		{
-			var methodInfo = typeof(TestPgFunctions).GetMethod("DynamicTableFunction", new [] { typeof(string) });
+			var methodInfo = typeof(TestPgFunctions).GetMethod("DynamicTableFunction", new [] { typeof(string) })!;
 
 			return _ctx.GetTable<TRecord>(this, methodInfo, json);
 		}

@@ -1037,16 +1037,23 @@ namespace Tests.Linq
 		public void SubQuery1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
+			{
+				var q = from p in db.Types
+					select new { Value = Math.Round(p.MoneyValue, 2) } into pp
+					where pp.Value != 0 && pp.Value != 7
+					select pp.Value;
+
+				if (context.StartsWith("DB2"))
+					q = q.AsQueryable().Select(t => Math.Round(t, 2));
+
 				AreEqual(
 					from p in Types
 					select new { Value = Math.Round(p.MoneyValue, 2) } into pp
 					where pp.Value != 0 && pp.Value != 7
 					select pp.Value
 					,
-					from p in db.Types
-					select new { Value = Math.Round(p.MoneyValue, 2) } into pp
-					where pp.Value != 0 && pp.Value != 7
-					select pp.Value);
+					q);
+			}
 		}
 
 		[Test]
@@ -1281,7 +1288,7 @@ namespace Tests.Linq
 				var act = actual.  Where(predicate);
 				AreEqual(exp, act, WhereCases.Comparer);
 				Assert.That(act.ToString(), Does.Not.Contain("<>"));
-				
+
 				var notPredicate = Expression.Lambda<Func<WhereCases, bool>>(
 					Expression.Not(predicate.Body), predicate.Parameters);
 
@@ -1502,6 +1509,44 @@ namespace Tests.Linq
 				// remote context doesn't have access to final SQL
 				if (!context.EndsWith(".LinqService"))
 					Assert.AreEqual(flag == null ? 0 : 1, Regex.Matches(sql, " AND ").Count);
+			}
+		}
+
+		[Test]
+		public void ExistsSqlTest1([DataSources(false)] string context)
+		{
+			using (var db = new TestDataConnection(context))
+			using (db.BeginTransaction())
+			{
+				db.Parent.Where(p => db.Child.Select(c => c.ParentID).Contains(p.ParentID)).Delete();
+
+				Assert.False(db.LastQuery!.ToLower().Contains("iif(exists(") || db.LastQuery!.ToLower().Contains("when exists("));
+			}
+		}
+
+		[Test]
+		public void ExistsSqlTest2([DataSources(false)] string context)
+		{
+			using (var db = new TestDataConnection(context))
+			using (db.BeginTransaction())
+			{
+				db.Parent.Where(p => p.Children.Any()).Delete();
+
+				Assert.False(db.LastQuery!.ToLower().Contains("iif(exists(") || db.LastQuery!.ToLower().Contains("when exists("));
+			}
+		}
+
+		[ActiveIssue(1767)]
+		[Test]
+		public void Issue1767Test([DataSources(false)] string context)
+		{
+			using (var db = new TestDataConnection(context))
+			using (db.BeginTransaction())
+			{
+				db.Person.FirstOrDefault(p => p.MiddleName != null && p.MiddleName != "test");
+
+				Assert.True(db.LastQuery!.Contains("IS NOT NULL"));
+				Assert.False(db.LastQuery!.Contains("IS NULL"));
 			}
 		}
 	}

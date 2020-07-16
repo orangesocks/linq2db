@@ -257,7 +257,7 @@ namespace Tests.Linq
 				var take = 5;
 				var expected =    Child.OrderByDescending(c => c.ChildID).Skip(skip).Take(take);
 				var result   = db.Child.OrderByDescending(c => c.ChildID).Skip(skip).Take(take);
-				
+
 				Assert.IsTrue(result.ToList().SequenceEqual(expected));
 				if (inline || (!db.DataProvider.SqlProviderFlags.AcceptsTakeAsParameter
 						&& !db.DataProvider.SqlProviderFlags.AcceptsTakeAsParameterIfSkip))
@@ -501,7 +501,7 @@ namespace Tests.Linq
 
 				Assert.IsNotEmpty(q);
 
-				var qry = q.ToString();
+				var qry = q.ToString()!;
 				Assert.That(qry.Contains("PERCENT"));
 			}
 
@@ -516,7 +516,7 @@ namespace Tests.Linq
 
 				Assert.IsNotEmpty(q);
 
-				var qry = q.ToString();
+				var qry = q.ToString()!;
 				Assert.That(qry.Contains("PERCENT"));
 			}
 
@@ -531,7 +531,7 @@ namespace Tests.Linq
 
 				Assert.IsNotEmpty(q);
 
-				var qry = q.ToString();
+				var qry = q.ToString()!;
 				Assert.That(qry.Contains("PERCENT"));
 				Assert.That(qry.Contains("WITH"));
 			}
@@ -547,7 +547,7 @@ namespace Tests.Linq
 
 				Assert.IsNotEmpty(q);
 
-				var qry = q.ToString();
+				var qry = q.ToString()!;
 				Assert.That(qry.Contains("PERCENT"));
 				Assert.That(qry.Contains("WITH"));
 			}
@@ -632,7 +632,7 @@ namespace Tests.Linq
 					new Confirmation { BatchId = 3, Date = DateTime.Parse("09 Apr 2019 14:30:35 GMT") },
 				}))
 				{
-				
+
 					var query = db.GetTable<Batch>()
 							.OrderByDescending(x => x.Id)
 							.Select(x => new
@@ -668,7 +668,7 @@ namespace Tests.Linq
 				return Value == other.Value;
 			}
 
-			public override bool Equals(object obj)
+			public override bool Equals(object? obj)
 			{
 				if (ReferenceEquals(null, obj)) return false;
 				if (ReferenceEquals(this, obj)) return true;
@@ -688,8 +688,8 @@ namespace Tests.Linq
 		{
 			var testData = new[]
 			{
-				new TakeSkipClass { Value = "PIPPO" }, 
-				new TakeSkipClass { Value = "PLUTO" }, 
+				new TakeSkipClass { Value = "PIPPO" },
+				new TakeSkipClass { Value = "PLUTO" },
 				new TakeSkipClass { Value = "PLUTO" },
 				new TakeSkipClass { Value = "BOLTO" }
 			};
@@ -722,8 +722,8 @@ namespace Tests.Linq
 		{
 			var testData = new[]
 			{
-				new TakeSkipClass { Value = "PLUTO" }, 
-				new TakeSkipClass { Value = "PIPPO" }, 
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "PIPPO" },
 				new TakeSkipClass { Value = "PLUTO" },
 				new TakeSkipClass { Value = "BOLTO" }
 			};
@@ -751,8 +751,8 @@ namespace Tests.Linq
 		{
 			var testData = new[]
 			{
-				new TakeSkipClass { Value = "PLUTO" }, 
-				new TakeSkipClass { Value = "PIPPO" }, 
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "PIPPO" },
 				new TakeSkipClass { Value = "PLUTO" },
 				new TakeSkipClass { Value = "BOLTO" }
 			};
@@ -775,5 +775,514 @@ namespace Tests.Linq
 			}
 		}
 
+		[Test]
+		public void MultipleTake1([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "PIPPO" },
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "BOLTO" }
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Take(3)
+					.Take(2)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Take(3)
+					.Take(2)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleTake2([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "PIPPO" },
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "BOLTO" }
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Take(2)
+					.Take(3)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Take(2)
+					.Take(3)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleTake3([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Take(1)
+					.Take(3)
+					.Take(2)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Take(1)
+					.Take(3)
+					.Take(2)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleTake4([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Take(2)
+					.Take(3)
+					.Take(1)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Take(2)
+					.Take(3)
+					.Take(1)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleSkip1([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "PIPPO" },
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "BOLTO" }
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Skip(1)
+					.Skip(2)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Skip(1)
+					.Skip(2)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleSkip2([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "PIPPO" },
+				new TakeSkipClass { Value = "PLUTO" },
+				new TakeSkipClass { Value = "BOLTO" }
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Skip(2)
+					.Skip(1)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Skip(2)
+					.Skip(1)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleSkip3([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Skip(2)
+					.Skip(3)
+					.Skip(1)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Skip(2)
+					.Skip(3)
+					.Skip(1)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleSkip4([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Skip(1)
+					.Skip(3)
+					.Skip(2)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Skip(1)
+					.Skip(3)
+					.Skip(2)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleTakeSkip1([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Take(6)
+					.Skip(2)
+					.Take(2)
+					.Skip(1)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Take(6)
+					.Skip(2)
+					.Take(2)
+					.Skip(1)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleTakeSkip2([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Skip(2)
+					.Take(5)
+					.Skip(1)
+					.Take(2)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Skip(2)
+					.Take(5)
+					.Skip(1)
+					.Take(2)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleTakeSkip3([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+				new TakeSkipClass { Value = "Value9" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Take(8)
+					.Skip(1)
+					.Take(4)
+					.Skip(1)
+					.Take(2)
+					.Skip(1)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Take(8)
+					.Skip(1)
+					.Take(4)
+					.Skip(1)
+					.Take(2)
+					.Skip(1)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
+
+		[Test]
+		public void MultipleTakeSkip4([DataSources] string context)
+		{
+			var testData = new[]
+			{
+				new TakeSkipClass { Value = "Value1" },
+				new TakeSkipClass { Value = "Value2" },
+				new TakeSkipClass { Value = "Value3" },
+				new TakeSkipClass { Value = "Value4" },
+				new TakeSkipClass { Value = "Value5" },
+				new TakeSkipClass { Value = "Value6" },
+				new TakeSkipClass { Value = "Value7" },
+				new TakeSkipClass { Value = "Value8" },
+				new TakeSkipClass { Value = "Value9" },
+			};
+
+			using (var db = GetDataContext(context))
+			using (var tempTable = db.CreateLocalTable(testData))
+			{
+
+				var actual = tempTable
+					.OrderBy(t => t.Value)
+					.Skip(1)
+					.Take(8)
+					.Skip(1)
+					.Take(4)
+					.Skip(1)
+					.Take(2)
+					.ToArray();
+
+				var expected = testData
+					.OrderBy(t => t.Value)
+					.Skip(1)
+					.Take(8)
+					.Skip(1)
+					.Take(4)
+					.Skip(1)
+					.Take(2)
+					.ToArray();
+
+				Assert.AreEqual(expected, actual);
+
+				if (db is TestDataConnection cn)
+				{
+					Assert.False(cn.LastQuery!.ToLower().Contains("iif"));
+					Assert.False(cn.LastQuery!.ToLower().Contains("case"));
+				}
+			}
+		}
 	}
 }
