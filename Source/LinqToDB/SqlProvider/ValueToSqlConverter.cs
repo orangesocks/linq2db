@@ -14,6 +14,11 @@ namespace LinqToDB.SqlProvider
 
 	public class ValueToSqlConverter
 	{
+		public ValueToSqlConverter()
+		{
+			BaseConverters = Array<ValueToSqlConverter>.Empty;
+		}
+
 		public ValueToSqlConverter(params ValueToSqlConverter[]? converters)
 		{
 			BaseConverters = converters ?? Array<ValueToSqlConverter>.Empty;
@@ -69,7 +74,7 @@ namespace LinqToDB.SqlProvider
 
 		internal readonly ValueToSqlConverter[] BaseConverters;
 
-		readonly Dictionary<Type,ConverterType> _converters = new Dictionary<Type,ConverterType>();
+		readonly Dictionary<Type,ConverterType> _converters = new ();
 
 		ConverterType? _booleanConverter;
 		ConverterType? _charConverter;
@@ -87,7 +92,7 @@ namespace LinqToDB.SqlProvider
 		ConverterType? _dateTimeConverter;
 		ConverterType? _stringConverter;
 
-		static readonly NumberFormatInfo _numberFormatInfo = new NumberFormatInfo
+		static readonly NumberFormatInfo _numberFormatInfo = new ()
 		{
 			CurrencyDecimalDigits    = NumberFormatInfo.InvariantInfo.CurrencyDecimalDigits,
 			CurrencyDecimalSeparator = NumberFormatInfo.InvariantInfo.CurrencyDecimalSeparator,
@@ -150,7 +155,7 @@ namespace LinqToDB.SqlProvider
 
 		public bool TryConvert(StringBuilder stringBuilder, object? value)
 		{
-			if (value == null || value is INullable && ((INullable)value).IsNull)
+			if (value == null || value is INullable nullable && nullable.IsNull)
 			{
 				stringBuilder.Append("NULL");
 				return true;
@@ -166,7 +171,7 @@ namespace LinqToDB.SqlProvider
 
 		bool TryConvertImpl(StringBuilder stringBuilder, SqlDataType dataType, object? value, bool tryBase)
 		{
-			if (value == null || value is INullable && ((INullable)value).IsNull)
+			if (value == null || value is INullable nullable && nullable.IsNull)
 			{
 				stringBuilder.Append("NULL");
 				return true;

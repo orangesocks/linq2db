@@ -10,15 +10,17 @@ namespace LinqToDB.Linq.Builder
 
 	class AllJoinsLinqBuilder : MethodCallBuilder
 	{
+		private static readonly string[] MethodNames4 = { "InnerJoin", "LeftJoin", "RightJoin", "FullJoin" };
+
 		protected override bool CanBuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
 		{
 			if (methodCall.Method.DeclaringType != typeof(LinqExtensions))
 				return false;
 
 			return
-				methodCall.IsQueryable("Join") && methodCall.Arguments.Count == 5 ||
-				methodCall.IsQueryable("InnerJoin", "LeftJoin", "RightJoin", "FullJoin") && methodCall.Arguments.Count == 4 ||
-				methodCall.IsQueryable("CrossJoin") && methodCall.Arguments.Count == 3;
+				methodCall.IsQueryable("Join"      ) && methodCall.Arguments.Count == 5 ||
+				methodCall.IsQueryable(MethodNames4) && methodCall.Arguments.Count == 4 ||
+				methodCall.IsQueryable("CrossJoin" ) && methodCall.Arguments.Count == 3;
 		}
 
 		protected override IBuildContext BuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
@@ -39,17 +41,14 @@ namespace LinqToDB.Linq.Builder
 				default:
 					conditionIndex = 3;
 
-					var joinValue = (SqlJoinType) methodCall.Arguments[2].EvaluateExpression()!;
-
-					switch (joinValue)
+					joinType = (SqlJoinType) methodCall.Arguments[2].EvaluateExpression()! switch
 					{
-						case SqlJoinType.Inner : joinType = JoinType.Inner; break;
-						case SqlJoinType.Left  : joinType = JoinType.Left;  break;
-						case SqlJoinType.Right : joinType = JoinType.Right; break;
-						case SqlJoinType.Full  : joinType = JoinType.Full;  break;
-						default                : throw new ArgumentOutOfRangeException();
-					}
-
+						SqlJoinType.Inner => JoinType.Inner,
+						SqlJoinType.Left  => JoinType.Left,
+						SqlJoinType.Right => JoinType.Right,
+						SqlJoinType.Full  => JoinType.Full,
+						_                 => throw new InvalidOperationException($"Unexpected join type: {(SqlJoinType)methodCall.Arguments[2].EvaluateExpression()!}")
+					};
 					break;
 			}
 
@@ -70,7 +69,7 @@ namespace LinqToDB.Linq.Builder
 			var joinContext = new JoinContext(buildInfo.Parent, selector, outerContext, innerContext)
 #if DEBUG
 			{
-				MethodCall = methodCall
+				Debug_MethodCall = methodCall
 			}
 #endif
 			;
@@ -90,8 +89,7 @@ namespace LinqToDB.Linq.Builder
 				builder.BuildSearchCondition(
 					joinContext, 
 					conditionExpr,
-					join.JoinedTable.Condition.Conditions,
-					false);
+					@join.JoinedTable.Condition.Conditions);
 			}
 			else
 			{

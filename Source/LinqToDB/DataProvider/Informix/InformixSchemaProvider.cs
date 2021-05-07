@@ -53,38 +53,32 @@ namespace LinqToDB.DataProvider.Informix
 
 		protected override DataType GetDataType(string? dataType, string? columnType, long? length, int? prec, int? scale)
 		{
-			switch (dataType)
+			return dataType switch
 			{
-				case "CHAR"       : return DataType.Char;
-				case "SMALLINT"   : return DataType.Int16;
-				case "INTEGER"    : return DataType.Int32;
-				case "FLOAT"      : return DataType.Double;
-				case "SMALLFLOAT" : return DataType.Single;
-				case "DECIMAL"    : return DataType.Decimal;
-				case "SERIAL"     : return DataType.Int32;
-				case "DATE"       : return DataType.DateTime;
-				case "MONEY"      : return DataType.Decimal;
-				case "DATETIME"   : return DataType.DateTime;
-				case "BYTE"       : return DataType.Binary;
-				case "TEXT"       : return DataType.Text;
-				case "VARCHAR"    : return DataType.VarChar;
-				case "INTERVAL"   : return DataType.Time;
-				case "NCHAR"      : return DataType.NChar;
-				case "NVARCHAR"   : return DataType.NVarChar;
-				case "INT8"       : return DataType.Int64;
-				case "SERIAL8"    : return DataType.Int64;
-				case "LVARCHAR"   : return DataType.VarChar;
-				case "BOOLEAN"    : return DataType.Boolean;
-				case "BIGINT"     : return DataType.Int64;
-				case "BIGSERIAL"  : return DataType.Int64;
-				//case "SET"        : return DataType.object).  ;
-				//case "MULTISET"   : return DataType.object).  ;
-				//case "LIST"       : return DataType.object).  ;
-				//case "ROW"        : return DataType.object).  ;
-				//case "COLLECTION" : return DataType.object).  ;
-			}
-
-			return DataType.Undefined;
+				"CHAR"       => DataType.Char,
+				"SMALLINT"   => DataType.Int16,
+				"INTEGER"    => DataType.Int32,
+				"FLOAT"      => DataType.Double,
+				"SMALLFLOAT" => DataType.Single,
+				"DECIMAL"    => DataType.Decimal,
+				"SERIAL"     => DataType.Int32,
+				"DATE"       => DataType.DateTime,
+				"MONEY"      => DataType.Decimal,
+				"DATETIME"   => DataType.DateTime,
+				"BYTE"       => DataType.Binary,
+				"TEXT"       => DataType.Text,
+				"VARCHAR"    => DataType.VarChar,
+				"INTERVAL"   => DataType.Time,
+				"NCHAR"      => DataType.NChar,
+				"NVARCHAR"   => DataType.NVarChar,
+				"INT8"       => DataType.Int64,
+				"SERIAL8"    => DataType.Int64,
+				"LVARCHAR"   => DataType.VarChar,
+				"BOOLEAN"    => DataType.Boolean,
+				"BIGINT"     => DataType.Int64,
+				"BIGSERIAL"  => DataType.Int64,
+				_            => DataType.Undefined,
+			};
 		}
 
 
@@ -95,14 +89,13 @@ namespace LinqToDB.DataProvider.Informix
 
 		protected override string? GetProviderSpecificType(string? dataType)
 		{
-			switch (dataType)
+			return dataType switch
 			{
-				case "DATETIME" : return _provider.Adapter.DateTimeType?.Name;
-				case "INTERVAL" : return _provider.Adapter.TimeSpanType?.Name;
-				case "DECIMAL"  : return _provider.Adapter.DecimalType? .Name;
-			}
-
-			return base.GetProviderSpecificType(dataType);
+				"DATETIME" => _provider.Adapter.DateTimeType?.Name,
+				"INTERVAL" => _provider.Adapter.TimeSpanType?.Name,
+				"DECIMAL"  => _provider.Adapter.DecimalType?.Name,
+				_          => base.GetProviderSpecificType(dataType),
+			};
 		}
 
 		protected override List<TableInfo> GetTables(DataConnection dataConnection, GetSchemaOptions options)
@@ -129,6 +122,10 @@ namespace LinqToDB.DataProvider.Informix
 				from pk in dataConnection.Query(
 					rd =>
 					{
+						// IMPORTANT: reader calls must be ordered to support SequentialAccess
+						var tableId = rd[0].ToString();
+						var pkName  = (string)rd[1];
+
 						var arr = new string?[16];
 
 						for (var i = 0; i < arr.Length; i++)
@@ -139,8 +136,8 @@ namespace LinqToDB.DataProvider.Informix
 
 						return new
 						{
-							TableID        = rd["tabid"].ToString(),
-							PrimaryKeyName = (string)rd["idxname"],
+							TableID        = tableId,
+							PrimaryKeyName = pkName,
 							arr
 						};
 					}, @"
@@ -252,7 +249,7 @@ namespace LinqToDB.DataProvider.Informix
 				k = arr[j].end_point - arr[j].start_point;
  
 				// add in the extra
-				k = k + len;
+				k += len;
  
 				c.ColumnType = c.DataType + " " + arr[j].datetype + " (" + k + ") TO " + arr[i].datetype;
 				c.Precision = 5;
@@ -371,6 +368,12 @@ namespace LinqToDB.DataProvider.Informix
 				from fk in dataConnection.Query(
 					rd =>
 					{
+						// IMPORTANT: reader calls must be ordered to support SequentialAccess
+						var id           = rd["ID"].ToString();
+						var name         = rd["Name"].ToString()!;
+						var thisTableID  = rd["ThisTableID"]. ToString();
+						var otherTableID = rd["OtherTableID"].ToString();
+
 						var arr = new string?[16][];
 
 						for (var i = 0; i < arr.Length; i++)
@@ -385,10 +388,6 @@ namespace LinqToDB.DataProvider.Informix
 							};
 						}
 
-						var id           = rd["ID"].ToString();
-						var name         = rd["Name"].ToString()!;
-						var thisTableID  = rd["ThisTableID"]. ToString();
-						var otherTableID = rd["OtherTableID"].ToString();
 
 						if (name.StartsWith("r"))
 						{
@@ -420,41 +419,41 @@ namespace LinqToDB.DataProvider.Informix
 							r.constrid    as ID,
 							tc.constrname as Name,
 							tc.tabid      as ThisTableID,
-							tt.tabname    as ThisTableName,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part1)  as ThisCol1,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part2)  as ThisCol2,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part3)  as ThisCol3,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part4)  as ThisCol4,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part5)  as ThisCol5,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part6)  as ThisCol6,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part7)  as ThisCol7,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part8)  as ThisCol8,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part9)  as ThisCol9,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part10) as ThisCol10,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part11) as ThisCol11,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part12) as ThisCol12,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part13) as ThisCol13,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part14) as ThisCol14,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part15) as ThisCol15,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part16) as ThisCol16,
 							oc.tabid      as OtherTableID,
-							ot.tabname    as OtherTableName,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part1)  as ThisCol1,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part1)  as OtherCol1,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part2)  as ThisCol2,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part2)  as OtherCol2,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part3)  as ThisCol3,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part3)  as OtherCol3,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part4)  as ThisCol4,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part4)  as OtherCol4,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part5)  as ThisCol5,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part5)  as OtherCol5,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part6)  as ThisCol6,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part6)  as OtherCol6,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part7)  as ThisCol7,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part7)  as OtherCol7,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part8)  as ThisCol8,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part8)  as OtherCol8,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part9)  as ThisCol9,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part9)  as OtherCol9,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part10) as ThisCol10,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part10) as OtherCol10,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part11) as ThisCol11,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part11) as OtherCol11,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part12) as ThisCol12,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part12) as OtherCol12,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part13) as ThisCol13,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part13) as OtherCol13,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part14) as ThisCol14,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part14) as OtherCol14,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part15) as ThisCol15,
 							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part15) as OtherCol15,
-							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part16) as OtherCol16
+							(SELECT colname FROM syscolumns c WHERE c.tabid = tc.tabid AND c.colno = tx.part16) as ThisCol16,
+							(SELECT colname FROM syscolumns c WHERE c.tabid = oc.tabid AND c.colno = ox.part16) as OtherCol16,
+							tt.tabname    as ThisTableName,
+							ot.tabname    as OtherTableName
 						FROM
 							sysreferences r
 								JOIN sysconstraints tc ON r.constrid = tc.constrid

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
@@ -80,7 +79,10 @@ namespace LinqToDB.Linq.Builder
 				.ConvertToIndex(expression, level, flags)
 				.ToArray();
 
-			return indexes;
+			var corrected = indexes.Select(s => s.WithSql(SubqueryContext.SelectQuery.Select.Columns[s.Index]))
+				.ToArray();
+
+			return corrected;
 		}
 
 		public IsExpressionResult IsExpression(Expression? expression, int level, RequestFor requestFlag)
@@ -95,20 +97,6 @@ namespace LinqToDB.Linq.Builder
 			expression = SequenceHelper.CorrectExpression(expression, this, SubqueryContext);
 			return SubqueryContext.GetContext(expression, level, buildInfo);
 		}
-
-		readonly Dictionary<ISqlExpression,int> _columnIndexes = new Dictionary<ISqlExpression,int>();
-
-		int GetIndex(SqlColumn column)
-		{
-			if (!_columnIndexes.TryGetValue(column, out var idx))
-			{
-				idx = SelectQuery.Select.Add(column);
-				_columnIndexes.Add(column, idx);
-			}
-
-			return idx;
-		}
-
 
 		public int ConvertToParentIndex(int index, IBuildContext context)
 		{
@@ -133,6 +121,10 @@ namespace LinqToDB.Linq.Builder
 		public SqlStatement GetResultStatement()
 		{
 			return SubqueryContext.GetResultStatement();
+		}
+
+		public void CompleteColumns()
+		{
 		}
 	}
 }

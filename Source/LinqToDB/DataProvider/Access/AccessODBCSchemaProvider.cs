@@ -2,12 +2,14 @@
 using System.Data;
 using System.Data.Common;
 using System.Linq;
-using LinqToDB.Common;
-using LinqToDB.Data;
-using LinqToDB.SchemaProvider;
+
+
 
 namespace LinqToDB.DataProvider.Access
 {
+	using Common;
+	using Data;
+	using SchemaProvider;
 	// https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/odbc-schema-collections
 	// unused tables:
 	// DataSourceInformation - database settings
@@ -32,7 +34,7 @@ namespace LinqToDB.DataProvider.Access
 			var tables = ((DbConnection)dataConnection.Connection).GetSchema("Tables");
 			var views  = ((DbConnection)dataConnection.Connection).GetSchema("Views");
 			var procs  = ((DbConnection)dataConnection.Connection).GetSchema("Procedures");
-			
+
 			var procIds = new HashSet<string>(
 				procs.AsEnumerable().Select(p => $"{p.Field<string>("PROCEDURE_CAT")}.{p.Field<string>("PROCEDURE_SCHEM")}.{p.Field<string>("PROCEDURE_NAME")}"));
 
@@ -146,9 +148,9 @@ namespace LinqToDB.DataProvider.Access
 			).ToList();
 		}
 
-		protected override DataTable? GetProcedureSchema(DataConnection dataConnection, string commandText, CommandType commandType, DataParameter[] parameters)
+		protected override DataTable? GetProcedureSchema(DataConnection dataConnection, string commandText, CommandType commandType, DataParameter[] parameters, GetSchemaOptions options)
 		{
-			return ((DbConnection)dataConnection.Connection).GetSchema("ProcedureColumns", new string?[] { null, null, commandText.TrimStart('[').TrimEnd(']') });
+			return ((DbConnection)dataConnection.Connection).GetSchema("ProcedureColumns", new[] { null, null, commandText.TrimStart('[').TrimEnd(']') });
 		}
 
 		protected override string? GetDbType(GetSchemaOptions options, string? columnType, DataTypeInfo? dataType, long? length, int? precision, int? scale, string? udtCatalog, string? udtSchema, string? udtName)

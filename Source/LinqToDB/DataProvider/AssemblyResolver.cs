@@ -43,13 +43,13 @@ namespace LinqToDB.DataProvider
 				typeof(AppDomain).GetEvent("AssemblyResolve")!.GetAddMethod(),
 				Expression.Constant(resolver)));
 
-			l.Compile()();
+			l.CompileExpression()();
 		}
 
 		public Assembly? Resolver(object? sender, ResolveEventArgs args)
 		{
 			if (args.Name == _resolveName)
-				return _assembly ?? (_assembly = Assembly.LoadFile(File.Exists(_path!) ? _path! : Path.Combine(_path!, args.Name, ".dll")));
+				return _assembly ??= Assembly.LoadFile(File.Exists(_path!) ? _path! : Path.Combine(_path!, args.Name, ".dll"));
 			return null;
 		}
 	}

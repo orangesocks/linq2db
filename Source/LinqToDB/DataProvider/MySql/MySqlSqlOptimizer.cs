@@ -12,13 +12,15 @@ namespace LinqToDB.DataProvider.MySql
 		{
 		}
 
+		public override bool CanCompareSearchConditions => true;
+		
 		public override SqlStatement TransformStatement(SqlStatement statement)
 		{
-			switch (statement.QueryType)
+			return statement.QueryType switch
 			{
-				case QueryType.Update : return CorrectMySqlUpdate((SqlUpdateStatement)statement);
-				default               : return statement;
-			}
+				QueryType.Update => CorrectMySqlUpdate((SqlUpdateStatement)statement),
+				_                => statement,
+			};
 		}
 
 		private SqlUpdateStatement CorrectMySqlUpdate(SqlUpdateStatement statement)
@@ -34,23 +36,20 @@ namespace LinqToDB.DataProvider.MySql
 			return statement;
 		}
 
-		public override ISqlExpression ConvertExpression(ISqlExpression expr)
+		public override ISqlExpression ConvertExpressionImpl<TContext>(ISqlExpression expression, ConvertVisitor<TContext> visitor,
+			EvaluationContext context)
 		{
-			expr = base.ConvertExpression(expr);
+			expression = base.ConvertExpressionImpl(expression, visitor, context);
 
-			if (expr is SqlBinaryExpression)
+			if (expression is SqlBinaryExpression be)
 			{
-				var be = (SqlBinaryExpression)expr;
-
 				switch (be.Operation)
 				{
 					case "+":
 						if (be.SystemType == typeof(string))
 						{
-							if (be.Expr1 is SqlFunction)
+							if (be.Expr1 is SqlFunction func)
 							{
-								var func = (SqlFunction)be.Expr1;
-
 								if (func.Name == "Concat")
 								{
 									var list = new List<ISqlExpression>(func.Parameters) { be.Expr2 };
@@ -81,10 +80,8 @@ namespace LinqToDB.DataProvider.MySql
 						break;
 				}
 			}
-			else if (expr is SqlFunction)
+			else if (expression is SqlFunction func)
 			{
-				var func = (SqlFunction) expr;
-
 				switch (func.Name)
 				{
 					case "Convert" :
@@ -104,7 +101,7 @@ namespace LinqToDB.DataProvider.MySql
 				}
 			}
 
-			return expr;
+			return expression;
 		}
 	}
 }

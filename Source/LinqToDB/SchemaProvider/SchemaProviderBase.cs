@@ -40,6 +40,50 @@ namespace LinqToDB.SchemaProvider
 		/// </summary>
 		protected virtual bool GetProcedureSchemaExecutesProcedure => false;
 
+		protected string? BuildSchemaFilter(GetSchemaOptions? options, string defaultSchema, Action<StringBuilder, string> stringLiteralBuilder)
+		{
+			var schemas = new HashSet<string>();
+			schemas.Add(defaultSchema);
+
+			if (options != null)
+			{
+				if (options.IncludedSchemas != null)
+				{
+					schemas.Clear();
+					foreach (var schema in options.IncludedSchemas)
+						if (!string.IsNullOrEmpty(schema))
+							schemas.Add(schema!);
+				}
+
+				if (options.ExcludedSchemas != null)
+					foreach (var schema in options.ExcludedSchemas)
+						if (!string.IsNullOrEmpty(schema))
+							schemas.Remove(schema!);
+			}
+
+			if (schemas.Count == 0)
+				return null;
+
+			var first = true;
+
+			var sb = new StringBuilder();
+			sb.Append("IN (");
+
+			foreach (var schema in schemas)
+			{
+				if (!first)
+					sb.Append(", ");
+				else
+					first = false;
+
+				stringLiteralBuilder(sb, schema);
+			}
+
+			sb.Append(')');
+
+			return sb.ToString();
+		}
+
 		public virtual DatabaseSchema GetSchema(DataConnection dataConnection, GetSchemaOptions? options = null)
 		{
 			if (options == null)
@@ -221,7 +265,8 @@ namespace LinqToDB.SchemaProvider
 
 				if (procs != null)
 				{
-					var procPparams = GetProcedureParameters(dataConnection, procs, options);
+					var procParams = GetProcedureParameters(dataConnection, procs, options);
+
 					procedures =
 					(
 						from sp in procs
@@ -230,7 +275,7 @@ namespace LinqToDB.SchemaProvider
 							(ExcludedSchemas .Count == 0 || !ExcludedSchemas .Contains(sp.SchemaName))  &&
 							(IncludedCatalogs.Count == 0 ||  IncludedCatalogs.Contains(sp.CatalogName)) &&
 							(ExcludedCatalogs.Count == 0 || !ExcludedCatalogs.Contains(sp.CatalogName))
-						join p  in procPparams on sp.ProcedureID equals p.ProcedureID
+						join p  in procParams on sp.ProcedureID equals p.ProcedureID
 						into gr
 						select new ProcedureSchema
 						{
@@ -243,6 +288,7 @@ namespace LinqToDB.SchemaProvider
 							IsResultDynamic     = sp.IsResultDynamic,
 							IsAggregateFunction = sp.IsAggregateFunction,
 							IsDefaultSchema     = sp.IsDefaultSchema,
+							Description         = sp.Description,
 							Parameters          =
 							(
 								from pr in gr
@@ -265,7 +311,8 @@ namespace LinqToDB.SchemaProvider
 									SystemType           = systemType ?? typeof(object),
 									DataType             = GetDataType(pr.DataType, pr.DataTypeExact, pr.Length, pr.Precision, pr.Scale),
 									ProviderSpecificType = GetProviderSpecificType(pr.DataType),
-									IsNullable           = pr.IsNullable
+									IsNullable           = pr.IsNullable,
+									Description          = pr.Description
 								}
 							).ToList()
 						} into ps
@@ -292,7 +339,8 @@ namespace LinqToDB.SchemaProvider
 									null,
 									procedure.CatalogName,
 									procedure.SchemaName,
-									procedure.ProcedureName).ToString();
+									procedure.ProcedureName,
+									TableOptions.NotSet).ToString();
 
 								LoadProcedureTableSchema(dataConnection, options, procedure, commandText, tables);
 							}
@@ -383,7 +431,7 @@ namespace LinqToDB.SchemaProvider
 			{
 				commandText = BuildTableFunctionLoadTableSchemaCommand(procedure, commandText);
 				commandType = CommandType.Text;
-				parameters  = new DataParameter[0];
+				parameters  = Array<DataParameter>.Empty;
 			}
 			else
 			{
@@ -393,13 +441,14 @@ namespace LinqToDB.SchemaProvider
 
 			try
 			{
-				var st = GetProcedureSchema(dataConnection, commandText, commandType, parameters);
+				var st = GetProcedureSchema(dataConnection, commandText, commandType, parameters, options);
 
 				procedure.IsLoaded = true;
 
 				if (st != null && st.Columns.Count > 0)
 				{
 					var columns = GetProcedureResultColumns(st, options);
+
 					if (columns.Count > 0)
 					{
 						procedure.ResultTable = new TableSchema
@@ -434,15 +483,17 @@ namespace LinqToDB.SchemaProvider
 		{
 			return new DataParameter
 			{
-				Name = p.ParameterName,
-				Value =
+				Name      = p.ParameterName,
+				Value     =
 					p.SystemType == typeof(string) ?
 						"" :
 						p.SystemType == typeof(DateTime) ?
-							DateTime.Now :
+							// use fixed value to generate stable baselines
+							new DateTime(2020, 09, 23) :
 							DefaultValue.GetValue(p.SystemType),
-				DataType = p.DataType,
-				Size = (int?)p.Size,
+				DataType  = p.DataType,
+				DbType    = p.SchemaType,
+				Size      = (int?)p.Size,
 				Direction =
 					p.IsIn ?
 						p.IsOut ?
@@ -458,7 +509,7 @@ namespace LinqToDB.SchemaProvider
 		{
 			if (typeName == null)
 				return null;
-			
+
 			return
 				options.PreferProviderSpecificTypes == true
 				? (ProviderSpecificDataTypesDic.TryGetValue(typeName, out var dt) ? dt : DataTypesDic                .TryGetValue(typeName, out dt) ? dt : null)
@@ -473,10 +524,10 @@ namespace LinqToDB.SchemaProvider
 				: (DataTypesByProviderDbTypeDic                .TryGetValue(typeId, out dt)     ? dt : ProviderSpecificDataTypesByProviderDbTypeDic.TryGetValue(typeId, out dt) ? dt : null);
 		}
 
-		protected virtual DataTable? GetProcedureSchema(DataConnection dataConnection, string commandText, CommandType commandType, DataParameter[] parameters)
+		protected virtual DataTable? GetProcedureSchema(DataConnection dataConnection, string commandText, CommandType commandType, DataParameter[] parameters, GetSchemaOptions options)
 		{
-			using (var rd = dataConnection.ExecuteReader(commandText, commandType, CommandBehavior.SchemaOnly, parameters))
-				return rd.Reader!.GetSchemaTable();
+			using var rd = dataConnection.ExecuteReader(commandText, commandType, CommandBehavior.SchemaOnly, parameters);
+			return rd.Reader!.GetSchemaTable();
 		}
 
 		protected virtual List<ColumnSchema> GetProcedureResultColumns(DataTable resultTable, GetSchemaOptions options)
@@ -547,7 +598,7 @@ namespace LinqToDB.SchemaProvider
 			return systemType;
 		}
 
-		protected virtual string? GetDbType(GetSchemaOptions options, string? columnType, DataTypeInfo? dataType, long? length, int? prec, int? scale, string? udtCatalog, string? udtSchema, string? udtName)
+		protected virtual string? GetDbType(GetSchemaOptions options, string? columnType, DataTypeInfo? dataType, long? length, int? precision, int? scale, string? udtCatalog, string? udtSchema, string? udtName)
 		{
 			var dbType = columnType;
 
@@ -566,10 +617,10 @@ namespace LinqToDB.SchemaProvider
 						switch (paramNames[i].Trim().ToLower())
 						{
 							case "size"       :
-							case "length"     : paramValues[i] = length;        break;
-							case "max length" : paramValues[i] = length == int.MaxValue ? "max" : length.HasValue ? length.ToString() : null; break;
-							case "precision"  : paramValues[i] = prec;          break;
-							case "scale"      : paramValues[i] = scale.HasValue || paramNames.Length == 2 ? scale : prec; break;
+							case "length"     : paramValues[i] = length; break;
+							case "max length" : paramValues[i] = length == int.MaxValue ? "max" : length?.ToString(); break;
+							case "precision"  : paramValues[i] = precision;   break;
+							case "scale"      : paramValues[i] = scale.HasValue || paramNames.Length == 2 ? scale : precision; break;
 						}
 					}
 
@@ -589,7 +640,7 @@ namespace LinqToDB.SchemaProvider
 				var ss = name.Split(new [] {' ', '\t'}, StringSplitOptions.RemoveEmptyEntries)
 					.Select(s => char.ToUpper(s[0]) + s.Substring(1));
 
-				name = string.Join("", ss.ToArray());
+				name = string.Concat(ss);
 			}
 
 			if (name.Length > 0 && char.IsDigit(name[0]))
@@ -601,8 +652,11 @@ namespace LinqToDB.SchemaProvider
 				.Replace('-',  '_')
 				.Replace('/',  '_')
 				.Replace('\\', '_')
-				.Replace(':', '_')
-				.Replace('`', '_')
+				.Replace('\r', '_')
+				.Replace('\n', '_')
+				.Replace('\t', '_')
+				.Replace(':' , '_')
+				.Replace('`' , '_')
 				;
 		}
 
@@ -733,12 +787,11 @@ namespace LinqToDB.SchemaProvider
 					if (name.EndsWith("_BackReference"))
 						name = name.Substring(0, name.Length - "_BackReference".Length);
 
-					name = string.Join("", name
+					name = string.Concat(name
 						.Split('_')
 						.Where(_ =>
 							_.Length > 0 && _ != table.TableName &&
-							(table.SchemaName == null || table.IsDefaultSchema || _ != table.SchemaName))
-						.ToArray());
+							(table.SchemaName == null || table.IsDefaultSchema || _ != table.SchemaName)));
 
 					var digitEnd = 0;
 					for (var i = name.Length - 1; i >= 0; i--)

@@ -9,8 +9,11 @@ namespace LinqToDB.DataProvider
 	using Mapping;
 	using SqlProvider;
 	using SqlQuery;
+	using System.Threading;
+	using System.Threading.Tasks;
 
 	public class MultipleRowsHelper<T> : MultipleRowsHelper
+		where T : notnull
 	{
 		public MultipleRowsHelper(ITable<T> table, BulkCopyOptions options)
 			: base((DataConnection)table.DataContext, options, typeof(T))
@@ -46,9 +49,9 @@ namespace LinqToDB.DataProvider
 		public          string?             TableName;
 		public readonly string              ParameterName;
 
-		public readonly List<DataParameter> Parameters    = new List<DataParameter>();
-		public readonly StringBuilder       StringBuilder = new StringBuilder();
-		public readonly BulkCopyRowsCopied  RowsCopied    = new BulkCopyRowsCopied();
+		public readonly List<DataParameter> Parameters    = new ();
+		public readonly StringBuilder       StringBuilder = new ();
+		public readonly BulkCopyRowsCopied  RowsCopied    = new ();
 
 		public int CurrentCount;
 		public int ParameterIndex;
@@ -62,7 +65,7 @@ namespace LinqToDB.DataProvider
 
 		public virtual void BuildColumns(object item, Func<ColumnDescriptor, bool>? skipConvert = null)
 		{
-			skipConvert = skipConvert ?? (_ => false);
+			skipConvert ??= (_ => false);
 
 			for (var i = 0; i < Columns.Length; i++)
 			{
@@ -87,7 +90,7 @@ namespace LinqToDB.DataProvider
 					});
 				}
 
-				StringBuilder.Append(",");
+				StringBuilder.Append(',');
 			}
 
 			StringBuilder.Length--;
@@ -96,6 +99,27 @@ namespace LinqToDB.DataProvider
 		public bool Execute()
 		{
 			DataConnection.Execute(StringBuilder.AppendLine().ToString(), Parameters.ToArray());
+
+			if (Options.RowsCopiedCallback != null)
+			{
+				Options.RowsCopiedCallback(RowsCopied);
+
+				if (RowsCopied.Abort)
+					return false;
+			}
+
+			Parameters.Clear();
+			ParameterIndex       = 0;
+			CurrentCount         = 0;
+			StringBuilder.Length = HeaderSize;
+
+			return true;
+		}
+
+		public async Task<bool> ExecuteAsync(CancellationToken cancellationToken)
+		{
+			await DataConnection.ExecuteAsync(StringBuilder.AppendLine().ToString(), cancellationToken, Parameters.ToArray())
+				.ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
 			if (Options.RowsCopiedCallback != null)
 			{

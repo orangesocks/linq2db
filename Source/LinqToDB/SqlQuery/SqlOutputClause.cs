@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Linq;
 
 namespace LinqToDB.SqlQuery
 {
-	public class SqlOutputClause : IQueryElement, ISqlExpressionWalkable, ICloneableElement
+	public class SqlOutputClause : IQueryElement, ISqlExpressionWalkable
 	{
 		private List<SqlSetExpression>? _outputItems;
 
@@ -16,7 +15,7 @@ namespace LinqToDB.SqlQuery
 		public SelectQuery? OutputQuery    { get; set; }
 
 		public bool                   HasOutputItems => _outputItems != null && _outputItems.Count > 0 || OutputQuery != null;
-		public List<SqlSetExpression> OutputItems    => _outputItems ?? (_outputItems = new List<SqlSetExpression>());
+		public List<SqlSetExpression> OutputItems    => _outputItems ??= new List<SqlSetExpression>();
 
 		#region Overrides
 
@@ -28,33 +27,6 @@ namespace LinqToDB.SqlQuery
 			}
 
 #endif
-
-		#endregion
-
-		#region ICloneableElement Members
-
-		public ICloneableElement Clone(Dictionary<ICloneableElement, ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
-		{
-			if (!doClone(this))
-				return this;
-
-			var clone = new SqlOutputClause
-			{
-				SourceTable   = SourceTable,
-				DeletedTable  = DeletedTable,
-				InsertedTable = InsertedTable,
-				OutputTable   = OutputTable
-			};
-
-			if (HasOutputItems)
-			{
-				clone.OutputItems.AddRange(OutputItems.Select(i => (SqlSetExpression)i.Clone(objectTree, doClone)));
-			}
-
-			objectTree.Add(this, clone);
-
-			return clone;
-		}
 
 		#endregion
 

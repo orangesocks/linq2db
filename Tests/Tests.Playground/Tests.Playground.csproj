@@ -11,4 +11,8 @@
 		<Compile Include="..\Linq\Create\CreateData.cs" Link="CreateData.cs" />
 	</ItemGroup>
 
+	<ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.1' ">
+		<!-- transient -->
+		<PackageReference Include="System.Security.Cryptography.Cng" />
+	</ItemGroup>
 </Project>
