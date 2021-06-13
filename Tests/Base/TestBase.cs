@@ -419,6 +419,7 @@ namespace Tests
 			TestProvName.SqlServer2019,
 			TestProvName.SqlServer2019SequentialAccess,
 			TestProvName.SqlServer2019FastExpressionCompiler,
+			TestProvName.SqlServerContained,
 			ProviderName.SqlServer2000,
 			ProviderName.SqlServer2005,
 			TestProvName.SqlAzure,
@@ -1056,6 +1057,58 @@ namespace Tests
 			return GetProviderName(context, out var _) == TestProvName.SqlServer2019;
 		}
 
+		/// <summary>
+		/// Returns case-sensitivity of string comparison (e.g. using LIKE) without explicit collation specified.
+		/// Depends on database implementation or database collation.
+		/// </summary>
+		protected bool IsCaseSensitiveComparison(string context)
+		{
+			var provider = GetProviderName(context, out var _);
+
+			// we intentionally configure Sql Server 2019 test database to be case-sensitive to test
+			// linq2db support for this configuration
+			// on CI we test two configurations:
+			// linux/mac: db is case sensitive, catalog is case insensitive
+			// windows: both db and catalog are case sensitive
+			return provider == TestProvName.SqlServer2019
+				|| provider == ProviderName.DB2
+				|| provider.StartsWith(ProviderName.Firebird)
+				|| provider.StartsWith(ProviderName.Informix)
+				|| provider.StartsWith(ProviderName.Oracle)
+				|| provider.StartsWith(ProviderName.PostgreSQL)
+				|| provider.StartsWith(ProviderName.SapHana)
+				|| provider.StartsWith(ProviderName.Sybase)
+				;
+		}
+
+		/// <summary>
+		/// Returns status of test CollatedTable - wether it is configured to have proper column collations or
+		/// use database defaults (<see cref="IsCaseSensitiveComparison"/>).
+		/// </summary>
+		protected bool IsCollatedTableConfigured(string context)
+		{
+			var provider = GetProviderName(context, out var _);
+
+			// unconfigured providers (some could be configured in theory):
+			// Access : no such concept as collation on column level (db-only)
+			// DB2
+			// Informix
+			// Oracle (in theory v12 has collations, but to enable them you need to complete quite a quest...)
+			// PostgreSQL (v12 + custom collation required (no default CI collations))
+			// SAP HANA
+			// SQL CE
+			// Sybase ASE
+			return provider == TestProvName.SqlAzure
+				|| provider == TestProvName.MariaDB
+				|| provider == TestProvName.AllOracleNative
+				|| provider.StartsWith(ProviderName.SqlServer)
+				|| provider.StartsWith(ProviderName.Firebird)
+				|| provider.StartsWith(ProviderName.MySql)
+				// while it is configured, LIKE in SQLite is case-insensitive (for ASCII only though)
+				//|| provider.StartsWith(ProviderName.SQLite)
+				;
+		}
+
 		protected void AreEqual<T>(IEnumerable<T> expected, IEnumerable<T> result, bool allowEmpty = false)
 		{
 			AreEqual(t => t, expected, result, EqualityComparer<T>.Default, allowEmpty);
@@ -1256,19 +1309,20 @@ namespace Tests
 			var finalTableName = tableName;
 			switch (GetProviderName(context, out var _))
 			{
-				case TestProvName.SqlAzure:
-				case ProviderName.SqlServer:
-				case ProviderName.SqlServer2000:
-				case ProviderName.SqlServer2005:
-				case ProviderName.SqlServer2008:
-				case ProviderName.SqlServer2012:
-				case ProviderName.SqlServer2014:
-				case ProviderName.SqlServer2016:
-				case ProviderName.SqlServer2017:
-				case TestProvName.SqlServer2019:
-				case TestProvName.SqlServer2019SequentialAccess:
+				case TestProvName.SqlAzure                           :
+				case ProviderName.SqlServer                          :
+				case ProviderName.SqlServer2000                      :
+				case ProviderName.SqlServer2005                      :
+				case ProviderName.SqlServer2008                      :
+				case ProviderName.SqlServer2012                      :
+				case ProviderName.SqlServer2014                      :
+				case ProviderName.SqlServer2016                      :
+				case ProviderName.SqlServer2017                      :
+				case TestProvName.SqlServer2019                      :
+				case TestProvName.SqlServer2019SequentialAccess      :
 				case TestProvName.SqlServer2019FastExpressionCompiler:
-				{
+				case TestProvName.SqlServerContained                 :
+					{
 					if (!tableName.StartsWith("#"))
 						finalTableName = "#" + tableName;
 					break;

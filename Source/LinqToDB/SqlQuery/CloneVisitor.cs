@@ -434,7 +434,8 @@ namespace LinqToDB.SqlQuery
 					var newInsert = new SqlInsertStatement(Clone(insert.SelectQuery))
 					{
 						Tag     = Clone(insert.Tag),
-						With    = Clone(insert.With)
+						With    = Clone(insert.With),
+						Output  = Clone(insert.Output)
 					};
 
 					if (insert.HasInsert)
@@ -534,7 +535,7 @@ namespace LinqToDB.SqlQuery
 				{
 					var expr = (SqlPredicate.Like)(IQueryElement)element;
 					// TODO: children Clone called before _objectTree update (original cloning logic)
-					_objectTree.Add(element, clone = new SqlPredicate.Like(Clone(expr.Expr1), expr.IsNot, Clone(expr.Expr2), expr.Escape));
+					_objectTree.Add(element, clone = new SqlPredicate.Like(Clone(expr.Expr1), expr.IsNot, Clone(expr.Expr2), expr.Escape, expr.FunctionName));
 					break;
 				}
 
@@ -542,7 +543,7 @@ namespace LinqToDB.SqlQuery
 				{
 					var expr = (SqlPredicate.SearchString)(IQueryElement)element;
 					// TODO: children Clone called before _objectTree update (original cloning logic)
-					_objectTree.Add(element, clone = new SqlPredicate.SearchString(Clone(expr.Expr1), expr.IsNot, Clone(expr.Expr2), expr.Kind, expr.IgnoreCase));
+					_objectTree.Add(element, clone = new SqlPredicate.SearchString(Clone(expr.Expr1), expr.IsNot, Clone(expr.Expr2), expr.Kind, Clone(expr.CaseSensitive)));
 					break;
 				}
 
@@ -559,6 +560,14 @@ namespace LinqToDB.SqlQuery
 					var expr = (SqlPredicate.IsTrue)(IQueryElement)element;
 					// TODO: children Clone called before _objectTree update (original cloning logic)
 					_objectTree.Add(element, clone = new SqlPredicate.IsTrue(Clone(expr.Expr1), expr.TrueValue, expr.FalseValue, expr.WithNull, expr.IsNot));
+					break;
+				}
+
+				case QueryElementType.IsDistinctPredicate:
+				{
+					var expr = (SqlPredicate.IsDistinct)(IQueryElement)element;
+					// TODO: children Clone called before _objectTree update (original cloning logic)
+					_objectTree.Add(element, clone = new SqlPredicate.IsDistinct(Clone(expr.Expr1), expr.IsNot, Clone(expr.Expr2)));
 					break;
 				}
 
@@ -715,7 +724,8 @@ namespace LinqToDB.SqlQuery
 					var newUpdate = new SqlUpdateStatement(Clone(update.SelectQuery))
 					{
 						Tag     = Clone(update.Tag),
-						With    = Clone(update.With)
+						With    = Clone(update.With),
+						Output  = Clone(update.Output)
 					};
 
 					if (update.HasUpdate)

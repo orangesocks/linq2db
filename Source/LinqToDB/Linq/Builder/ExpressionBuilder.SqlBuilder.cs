@@ -280,7 +280,7 @@ namespace LinqToDB.Linq.Builder
 
 		#region IsSubQuery
 
-		bool IsSubQuery(IBuildContext context, MethodCallExpression call)
+		public bool IsSubQuery(IBuildContext context, MethodCallExpression call)
 		{
 			var isAggregate = call.IsAggregate(MappingSchema);
 
@@ -1679,7 +1679,36 @@ namespace LinqToDB.Linq.Builder
 
 		ISqlPredicate ConvertPredicate(IBuildContext? context, Expression expression)
 		{
-			var isPredicate = true;
+			ISqlExpression IsCaseSensitive(MethodCallExpression mc)
+			{
+				if (mc.Arguments.Count <= 1)
+					return new SqlValue(typeof(bool?), null);
+
+				if (!typeof(StringComparison).IsSameOrParentOf(mc.Arguments[1].Type))
+					return new SqlValue(typeof(bool?), null);
+
+				var arg = mc.Arguments[1];
+
+				if (arg.NodeType == ExpressionType.Constant)
+				{
+					var comparison = (StringComparison)(arg.EvaluateExpression() ?? throw new InvalidOperationException());
+					return new SqlValue(comparison == StringComparison.CurrentCulture   ||
+					                    comparison == StringComparison.InvariantCulture ||
+					                    comparison == StringComparison.Ordinal);
+				}
+
+				var variable = Expression.Variable(typeof(StringComparison), "c");
+				var assignment = Expression.Assign(variable, arg);
+				var expr     = (Expression)Expression.Equal(variable, Expression.Constant(StringComparison.CurrentCulture));
+				expr = Expression.OrElse(expr, Expression.Equal(variable, Expression.Constant(StringComparison.InvariantCulture)));
+				expr = Expression.OrElse(expr, Expression.Equal(variable, Expression.Constant(StringComparison.Ordinal)));
+				expr = Expression.Block(new[] {variable}, assignment, expr);
+
+				var parameter = BuildParameter(expr, columnDescriptor: null, forceConstant: true);
+				parameter.SqlParameter.IsQueryParameter = false;
+
+				return parameter.SqlParameter;
+			}
 
 			switch (expression.NodeType)
 			{
@@ -1707,9 +1736,9 @@ namespace LinqToDB.Linq.Builder
 					{
 						switch (e.Method.Name)
 						{
-							case "Contains": predicate = CreateStringPredicate(context, e, SqlPredicate.SearchString.SearchKind.Contains); break;
-							case "StartsWith": predicate = CreateStringPredicate(context, e, SqlPredicate.SearchString.SearchKind.StartsWith); break;
-							case "EndsWith": predicate = CreateStringPredicate(context, e, SqlPredicate.SearchString.SearchKind.EndsWith); break;
+								case "Contains"   : predicate = CreateStringPredicate(context, e, SqlPredicate.SearchString.SearchKind.Contains,   IsCaseSensitive(e)); break;
+								case "StartsWith" : predicate = CreateStringPredicate(context, e, SqlPredicate.SearchString.SearchKind.StartsWith, IsCaseSensitive(e)); break;
+								case "EndsWith"   : predicate = CreateStringPredicate(context, e, SqlPredicate.SearchString.SearchKind.EndsWith,   IsCaseSensitive(e)); break;
 						}
 					}
 					else if (e.Method.Name == "Contains")
@@ -1764,7 +1793,6 @@ namespace LinqToDB.Linq.Builder
 					if (attr != null && attr.GetIsPredicate(expression))
 						break;
 
-					isPredicate = false;
 					break;
 				}
 
@@ -1773,19 +1801,6 @@ namespace LinqToDB.Linq.Builder
 							ConvertToSql(context, expression),
 							SqlPredicate.Operator.Equal,
 							new SqlValue(true), null);
-
-				case ExpressionType.MemberAccess:
-				{
-					var e = (MemberExpression)expression;
-
-					var attr = GetExpressionAttribute(e.Member);
-
-					if (attr != null && attr.GetIsPredicate(expression))
-						break;
-
-					isPredicate = false;
-					break;
-				}
 
 				case ExpressionType.TypeIs:
 				{
@@ -1805,22 +1820,13 @@ namespace LinqToDB.Linq.Builder
 					if (e.Type == typeof(bool) && e.Operand.Type == typeof(SqlBoolean))
 						return ConvertPredicate(context, e.Operand);
 
-					isPredicate = false;
 					break;
 				}
-
-				case ChangeTypeExpression.ChangeTypeType:
-					isPredicate = false;
-					break;
-
-				default:
-					isPredicate = false;
-					break;
 			}
 
 			var ex = ConvertToSql(context, expression);
 
-			if (!isPredicate && SqlExpression.NeedsEqual(ex))
+			if (SqlExpression.NeedsEqual(ex))
 			{
 				var descriptor = QueryHelper.GetColumnDescriptor(ex);
 				var trueValue  = ConvertToSql(context, ExpressionHelper.TrueConstant,  false, descriptor);
@@ -2221,24 +2227,19 @@ namespace LinqToDB.Linq.Builder
 
 		#region ConvertObjectComparison
 
-		static Expression? ConstructMemberPath(IEnumerable<MemberInfo> memberPath, Expression ob, bool throwOnError)
+		static Expression? ConstructMemberPath(MemberInfo[] memberPath, Expression ob, bool throwOnError)
 		{
 			Expression result = ob;
-			var skipCount     = 0;
 			foreach (var memberInfo in memberPath)
 			{
-				if (!memberInfo.DeclaringType!.IsAssignableFrom(result.Type))
+				if (memberInfo.DeclaringType!.IsAssignableFrom(result.Type))
 				{
-					// first element may have inappropriate nesting
-					if (skipCount-- == 0)
-						continue;
-
-					if (throwOnError)
-						throw new LinqToDBException($"Type {result.Type.Name} does not have member {memberInfo.Name}.");
-					return null;
+					result = Expression.MakeMemberAccess(result, memberInfo);
 				}
-				result = Expression.MakeMemberAccess(result, memberInfo);
 			}
+
+			if (ReferenceEquals(result, ob) && throwOnError)
+				throw new LinqToDBException($"Type {result.Type.Name} does not have member {memberPath.Last().Name}.");
 
 			return result;
 		}
@@ -2286,13 +2287,13 @@ namespace LinqToDB.Linq.Builder
 
 					sr = false;
 
-					var lm = lmembers;
+					var lm   = lmembers;
 					lmembers = rmembers;
 					rmembers = lm;
 				}
 
 				isNull = right is ConstantExpression expression && expression.Value == null;
-				lcols = lmembers.Select(m => new SqlInfo(m.Key, ConvertToSql(leftContext, m.Value))).ToArray();
+				lcols  = lmembers.Select(m => new SqlInfo(m.Key, ConvertToSql(leftContext, m.Value))).ToArray();
 			}
 			else
 			{
@@ -2300,14 +2301,14 @@ namespace LinqToDB.Linq.Builder
 				{
 					var r = right;
 					right = left;
-					left = r;
+					left  = r;
 
-					var c = rightContext;
+					var c        = rightContext;
 					rightContext = leftContext;
-					leftContext = c;
+					leftContext  = c;
 
 					var q = qsr;
-					qsl = q;
+					qsl   = q;
 
 					sr = false;
 				}
@@ -2767,13 +2768,13 @@ namespace LinqToDB.Linq.Builder
 
 		#region LIKE predicate
 
-		ISqlPredicate CreateStringPredicate(IBuildContext? context, MethodCallExpression expression, SqlPredicate.SearchString.SearchKind kind)
+		ISqlPredicate CreateStringPredicate(IBuildContext? context, MethodCallExpression expression, SqlPredicate.SearchString.SearchKind kind, ISqlExpression caseSensitive)
 		{
 			var e = expression;
 			var o = ConvertToSql(context, e.Object);
 			var a = ConvertToSql(context, e.Arguments[0]);
 
-			return new SqlPredicate.SearchString(o, false, a, kind, true);
+			return new SqlPredicate.SearchString(o, false, a, kind, caseSensitive);
 		}
 
 		ISqlPredicate ConvertLikePredicate(IBuildContext context, MethodCallExpression expression)

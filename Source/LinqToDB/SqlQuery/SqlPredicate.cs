@@ -346,15 +346,17 @@ namespace LinqToDB.SqlQuery
 		//
 		public class Like : BaseNotExpr
 		{
-			public Like(ISqlExpression exp1, bool isNot, ISqlExpression exp2, ISqlExpression? escape)
+			public Like(ISqlExpression exp1, bool isNot, ISqlExpression exp2, ISqlExpression? escape, string? functionName = null)
 				: base(exp1, isNot, SqlQuery.Precedence.Comparison)
 			{
 				Expr2     = exp2;
 				Escape    = escape;
+				FunctionName = functionName;
 			}
 
 			public ISqlExpression  Expr2     { get; internal set; }
 			public ISqlExpression? Escape    { get; internal set; }
+			public string?         FunctionName { get; internal set; }
 
 			protected override void Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 			{
@@ -376,7 +378,8 @@ namespace LinqToDB.SqlQuery
 				Expr1.ToString(sb, dic);
 
 				if (IsNot) sb.Append(" NOT");
-				sb.Append(" LIKE ");
+
+				sb.Append(' ').Append(FunctionName ?? "LIKE").Append(' ');
 
 				Expr2.ToString(sb, dic);
 
@@ -400,17 +403,17 @@ namespace LinqToDB.SqlQuery
 				Contains
 			}
 
-			public SearchString(ISqlExpression exp1, bool isNot, ISqlExpression exp2, SearchKind searchKind, bool ignoreCase)
+			public SearchString(ISqlExpression exp1, bool isNot, ISqlExpression exp2, SearchKind searchKind, ISqlExpression caseSensitive)
 				: base(exp1, isNot, SqlQuery.Precedence.Comparison)
 			{
-				Expr2      = exp2;
-				Kind       = searchKind;
-				IgnoreCase = ignoreCase;
+				Expr2         = exp2;
+				Kind          = searchKind;
+				CaseSensitive = caseSensitive;
 			}
 
-			public ISqlExpression Expr2      { get; internal set; }
-			public SearchKind     Kind       { get; }
-			public bool           IgnoreCase { get; }
+			public ISqlExpression Expr2         { get; internal set; }
+			public SearchKind     Kind          { get; }
+			public ISqlExpression CaseSensitive { get; }
 
 			protected override void Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 			{
@@ -420,7 +423,7 @@ namespace LinqToDB.SqlQuery
 
 			public override IQueryElement Invert()
 			{
-				return new SearchString(Expr1, !IsNot, Expr2, Kind, IgnoreCase);
+				return new SearchString(Expr1, !IsNot, Expr2, Kind, CaseSensitive);
 			}
 
 			public override QueryElementType ElementType => QueryElementType.SearchStringPredicate;
@@ -447,6 +450,37 @@ namespace LinqToDB.SqlQuery
 
 				Expr2.ToString(sb, dic);
 			}
+		}
+
+		// expression IS [ NOT ] DISTINCT FROM expression
+		//
+		public class IsDistinct : BaseNotExpr
+		{
+			public IsDistinct(ISqlExpression exp1, bool isNot, ISqlExpression exp2)
+				: base(exp1, isNot, SqlQuery.Precedence.Comparison)
+			{
+				Expr2 = exp2;
+			}
+
+			public ISqlExpression Expr2 { get; internal set; }
+
+			protected override void Walk(WalkOptions options, Func<ISqlExpression, ISqlExpression> func)
+			{
+				base.Walk(options, func);
+				Expr2 = Expr2.Walk(options, func)!;
+			}
+
+			public override IQueryElement Invert() => new IsDistinct(Expr1, !IsNot, Expr2);
+
+			public override QueryElementType ElementType => QueryElementType.IsDistinctPredicate;
+
+			protected override void ToString(StringBuilder sb, Dictionary<IQueryElement, IQueryElement> dic)
+			{
+				Expr1.ToString(sb, dic);
+				sb.Append(IsNot ? " IS NOT DISTINCT FROM " : " IS DISTINCT FROM ");
+				Expr2.ToString(sb, dic);
+			}
+		
 		}
 
 		// expression [ NOT ] BETWEEN expression AND expression

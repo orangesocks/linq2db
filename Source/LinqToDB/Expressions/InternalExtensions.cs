@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -136,12 +134,31 @@ namespace LinqToDB.Expressions
 			};
 		}
 
-		private static readonly MethodInfo[] SkipPathThroughMethods = new [] { Methods.Enumerable.AsQueryable, Methods.LinqToDB.SqlExt.ToNotNull };
+		private static readonly MethodInfo[] SkipPathThroughMethods =
+		{
+			Methods.Enumerable.AsQueryable, Methods.LinqToDB.SqlExt.ToNotNull, Methods.LinqToDB.SqlExt.Alias
+		};
 
 		public static Expression SkipPathThrough(this Expression expr)
 		{
-			while (expr is MethodCallExpression mce && mce.IsSameGenericMethod(SkipPathThroughMethods))
-				expr = mce.Arguments[0];
+			switch (expr.NodeType)
+			{
+				case ExpressionType.MemberAccess:
+				{
+					var ma = (MemberExpression)expr;
+					if (ma.Expression != null)
+						return ma.Update(ma.Expression.SkipPathThrough());
+					break;
+				}
+				case ExpressionType.Call:
+				{
+					var mc = (MethodCallExpression)expr;
+					if (mc.IsSameGenericMethod(SkipPathThroughMethods))
+						return mc.Arguments[0].SkipPathThrough();
+					break;
+				}
+			}
+			
 			return expr;
 		}
 
@@ -569,6 +586,16 @@ namespace LinqToDB.Expressions
 
 			var value = Expression.Lambda(expr).CompileExpression().DynamicInvoke();
 			return value;
+		}
+
+		public static Expression? GetArgumentByName(this MethodCallExpression methodCall, string parameterName)
+		{
+			var arguments = methodCall.Arguments;
+			var parameters = methodCall.Method.GetParameters();
+			for (int i = 0; i < parameters.Length; i++)
+				if (parameters[i].Name == parameterName)
+					return arguments[i];
+			return default;
 		}
 
 		#endregion

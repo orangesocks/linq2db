@@ -106,6 +106,14 @@ namespace LinqToDB.SqlQuery
 							Find(((SqlPredicate.IsTrue)element).FalseValue);
 					}
 
+				case QueryElementType.IsDistinctPredicate:
+					{
+						var p = (SqlPredicate.IsDistinct)element;
+						return
+							Find(p.Expr1) ??
+							Find(p.Expr2);
+					}
+
 				case QueryElementType.SqlBinaryExpression:
 					{
 						return
@@ -239,6 +247,7 @@ namespace LinqToDB.SqlQuery
 					{
 						return Find(((SqlInsertStatement)element).SelectQuery) ??
 						       Find(((SqlInsertStatement)element).Insert     ) ??
+						       Find(((SqlInsertStatement)element).Output     ) ??
 						       Find(((SqlInsertStatement)element).With       ) ??
 						       Find(((SqlInsertStatement)element).Tag        );
 					}
@@ -247,6 +256,7 @@ namespace LinqToDB.SqlQuery
 					{
 						return Find(((SqlUpdateStatement)element).SelectQuery) ??
 						       Find(((SqlUpdateStatement)element).Update     ) ??
+						       Find(((SqlUpdateStatement)element).Output     ) ??
 						       Find(((SqlUpdateStatement)element).With       ) ??
 						       Find(((SqlUpdateStatement)element).Tag        );
 					}
@@ -325,6 +335,7 @@ namespace LinqToDB.SqlQuery
 				case QueryElementType.MergeStatement:
 					{
 						return
+							Find(((SqlMergeStatement)element).With      ) ??
 							Find(((SqlMergeStatement)element).Target    ) ??
 							Find(((SqlMergeStatement)element).Source    ) ??
 							Find(((SqlMergeStatement)element).On        ) ??
@@ -333,7 +344,7 @@ namespace LinqToDB.SqlQuery
 							Find(((SqlMergeStatement)element).Tag       );
 					}
 
-				case QueryElementType.MergeSourceTable:
+				case QueryElementType.SqlTableLikeSource:
 					{
 						return
 							Find(((SqlTableLikeSource)element).SourceEnumerable) ??

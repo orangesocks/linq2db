@@ -179,15 +179,39 @@ namespace LinqToDB.SqlProvider
 			{
 				var foundCte  = new Dictionary<CteClause, HashSet<CteClause>>();
 
-				select.SelectQuery.Visit(foundCte, static (foundCte, e) =>
-					{
-						if (e.ElementType == QueryElementType.SqlCteTable)
+				if (select is SqlMergeStatement merge)
+				{
+					merge.Target.Visit(foundCte, static (foundCte, e) =>
 						{
-							var cte = ((SqlCteTable)e).Cte!;
-							RegisterDependency(cte, foundCte);
+							if (e.ElementType == QueryElementType.SqlCteTable)
+							{
+								var cte = ((SqlCteTable)e).Cte!;
+								RegisterDependency(cte, foundCte);
+							}
 						}
-					}
-				);
+					);
+					merge.Source.Visit(foundCte, static (foundCte, e) =>
+						{
+							if (e.ElementType == QueryElementType.SqlCteTable)
+							{
+								var cte = ((SqlCteTable)e).Cte!;
+								RegisterDependency(cte, foundCte);
+							}
+						}
+					);
+				}
+				else
+				{
+					select.SelectQuery.Visit(foundCte, static (foundCte, e) =>
+						{
+							if (e.ElementType == QueryElementType.SqlCteTable)
+							{
+								var cte = ((SqlCteTable)e).Cte!;
+								RegisterDependency(cte, foundCte);
+							}
+						}
+					);
+				}
 
 				if (foundCte.Count == 0)
 					select.With = null;
@@ -216,7 +240,7 @@ namespace LinqToDB.SqlProvider
 			return hasParameters;
 		}
 
-		static T NormalizeExpressions<T>(T expression, bool allowMutation)
+		static T NormalizeExpressions<T>(T expression, bool allowMutation) 
 			where T : class, IQueryElement
 		{
 			var result = expression.ConvertAll(allowMutation: allowMutation, static (visitor, e) =>
@@ -1150,6 +1174,31 @@ namespace LinqToDB.SqlProvider
 
 					break;
 				}
+
+				case QueryElementType.IsDistinctPredicate:
+				{
+					var expr = (SqlPredicate.IsDistinct)predicate;
+
+					// Here, several optimisations would already have occured:
+					// - If both expressions could be evaluated, Sql.IsDistinct would have been evaluated client-side.
+					// - If both expressions could not be null, an Equals expression would have been used instead.
+
+					// The only remaining case that we'd like to simplify is when one expression is the constant null.
+					if (expr.Expr1.TryEvaluateExpression(context, out var value1) && value1 == null)
+					{
+						return expr.Expr2.CanBeNull
+							? new SqlPredicate.IsNull(expr.Expr2, !expr.IsNot)
+							: new SqlPredicate.Expr(new SqlValue(!expr.IsNot));
+					}
+					if (expr.Expr2.TryEvaluateExpression(context, out var value2) && value2 == null)
+					{
+						return expr.Expr1.CanBeNull
+							? new SqlPredicate.IsNull(expr.Expr1, !expr.IsNot)
+							: new SqlPredicate.Expr(new SqlValue(!expr.IsNot));
+					}
+
+					break;
+				}
 			}
 
 			return predicate;
@@ -1609,33 +1658,33 @@ namespace LinqToDB.SqlProvider
 				var newElement = element.ConvertAll(
 					ctx,
 					static (visitor, e) =>
+				{
+					var prev = e;
+					var ne   = e;
+					for (;;)
 					{
-						var prev = e;
-						var ne   = e;
-						for (;;)
-						{
 							ne = visitor.Context.Func(visitor.Context.OptimizationContext, visitor.Context.Optimizer, visitor, visitor.Context.Context, e);
 
-							if (ReferenceEquals(ne, e))
-								break;
+						if (ReferenceEquals(ne, e))
+							break;
 
-							e = ne;
-						}
+						e = ne;
+					}
 
 						if (visitor.Context.Register)
 							visitor.Context.OptimizationContext.RegisterOptimized(prev, e);
 
-						return e;
+					return e;
 					},
 					static args =>
-					{
+				{
 						if (args.Visitor.Context.OptimizationContext.IsOptimized(args.Element, out var expr))
-						{
-							args.Element = expr;
-							return false;
-						}	
-						return true;
-					});
+					{
+						args.Element = expr;
+						return false;
+					}	
+					return true;
+				});
 
 				if (ReferenceEquals(newElement, element))
 					return element;
@@ -1742,12 +1791,12 @@ namespace LinqToDB.SqlProvider
 		}
 
 
-		public virtual string LikeEscapeCharacter => "~";
-		public virtual string LikeWildcardCharacter => "%";
-
-		public virtual bool LikeHasCharacterSetSupport => true;
-		public virtual bool LikeParameterSupport => true;
-		public virtual bool LikeIsEscapeSupported => true;
+		public virtual string LikeEscapeCharacter         => "~";
+		public virtual string LikeWildcardCharacter       => "%";
+		public virtual bool   LikeHasCharacterSetSupport  => true;
+		public virtual bool   LikePatternParameterSupport => true;
+		public virtual bool   LikeValueParameterSupport   => true;
+		public virtual bool   LikeIsEscapeSupported       => true;
 
 		protected static string[] StandardLikeCharactersToEscape = {"%", "_", "?", "*", "#", "[", "]"};
 		public virtual string[]   LikeCharactersToEscape => StandardLikeCharactersToEscape;
@@ -1829,14 +1878,11 @@ namespace LinqToDB.SqlProvider
 			ConvertVisitor<RunOptimizationContext<TContext>> visitor,
 			OptimizationContext optimizationContext)
 		{
-			if (predicate.Expr2.TryEvaluateExpression(optimizationContext.Context, out var patternRaw))
+			if (predicate.Expr2.TryEvaluateExpression(optimizationContext.Context, out var patternRaw)
+				&& Converter.TryConvertToString(patternRaw, out var patternRawValue))
 			{
-				var patternRawValue = patternRaw as string;
-
 				if (patternRawValue == null)
-				{
 					return new SqlPredicate.IsTrue(new SqlValue(true), new SqlValue(true), new SqlValue(false), null, predicate.IsNot);
-				}
 
 				var patternValue = LikeIsEscapeSupported
 					? EscapeLikeCharacters(patternRawValue, LikeEscapeCharacter)
@@ -1850,11 +1896,21 @@ namespace LinqToDB.SqlProvider
 					_ => throw new InvalidOperationException($"Unexpected predicate kind: {predicate.Kind}")
 				};
 
-				var patternExpr = LikeParameterSupport
+				var patternExpr = LikePatternParameterSupport
 					? CreateSqlValue(patternValue, predicate.Expr2.GetExpressionType(), predicate.Expr2)
 					: new SqlValue(patternValue);
 
-				return new SqlPredicate.Like(predicate.Expr1, predicate.IsNot, patternExpr,
+				var valueExpr = predicate.Expr1;
+				if (!LikeValueParameterSupport)
+				{
+					predicate.Expr1.VisitAll(static e =>
+					{
+						if (e is SqlParameter p)
+							p.IsQueryParameter = false;
+					});
+				}
+
+				return new SqlPredicate.Like(valueExpr, predicate.IsNot, patternExpr,
 					LikeIsEscapeSupported && (patternValue != patternRawValue) ? new SqlValue(LikeEscapeCharacter) : null);
 			}
 			else
@@ -1873,7 +1929,6 @@ namespace LinqToDB.SqlProvider
 					_ => throw new InvalidOperationException($"Unexpected predicate kind: {predicate.Kind}")
 				};
 
-
 				patternExpr = OptimizeExpression(patternExpr, visitor, optimizationContext.Context);
 
 				return new SqlPredicate.Like(predicate.Expr1, predicate.IsNot, patternExpr,
@@ -1885,8 +1940,15 @@ namespace LinqToDB.SqlProvider
 			ConvertVisitor<RunOptimizationContext<TContext>> visitor, 
 			OptimizationContext optimizationContext)
 		{
-			if (!predicate.IgnoreCase)
-				throw new NotImplementedException("!predicate.IgnoreCase");
+			if (predicate.CaseSensitive.EvaluateBoolExpression(optimizationContext.Context) == false)
+			{
+				predicate = new SqlPredicate.SearchString(
+					new SqlFunction(typeof(string), "$ToLower$", predicate.Expr1),
+					predicate.IsNot,
+					new SqlFunction(typeof(string), "$ToLower$", predicate.Expr2),
+					predicate.Kind,
+					new SqlValue(false));
+			}
 
 			return ConvertSearchStringPredicateViaLike(mappingSchema, predicate, visitor, optimizationContext);
 		}
@@ -1979,13 +2041,7 @@ namespace LinqToDB.SqlProvider
 							var values = new List<ISqlExpression>();
 
 							foreach (var item in items)
-							{
-								var value = expr.GetValue(item!, 0);
-								var systemType = parameters[0].Sql.SystemType ?? value?.GetType();
-								if (systemType == null)
-									throw new InvalidOperationException("Cannot calculate SystemType for constant.");
-								values.Add(new SqlValue(systemType, value));
-							}
+								values.Add(expr.GetSqlValue(item!, 0));
 
 							if (values.Count == 0)
 								return new SqlPredicate.Expr(new SqlValue(p.IsNot));
@@ -2002,10 +2058,10 @@ namespace LinqToDB.SqlProvider
 							for (var i = 0; i < parameters.Length; i++)
 							{
 								var sql   = parameters[i].Sql;
-								var value = expr.GetValue(item!, i);
+								var value = expr.GetSqlValue(item!, i);
 								var cond  = value == null ?
 									new SqlCondition(false, new SqlPredicate.IsNull  (sql, false)) :
-									new SqlCondition(false, new SqlPredicate.ExprExpr(sql, SqlPredicate.Operator.Equal, new SqlValue(value), null));
+									new SqlCondition(false, new SqlPredicate.ExprExpr(sql, SqlPredicate.Operator.Equal, value, null));
 
 								itemCond.Conditions.Add(cond);
 							}
@@ -2223,6 +2279,9 @@ namespace LinqToDB.SqlProvider
 
 		protected SqlUpdateStatement GetAlternativeUpdate(SqlUpdateStatement updateStatement)
 		{
+			if (updateStatement.Output != null)
+				throw new NotImplementedException($"GetAlternativeUpdate not implemented for update with output");
+
 			var sourcesCount  = QueryHelper.EnumerateAccessibleSources(updateStatement.SelectQuery).Skip(1).Take(2).Count();
 
 			// It covers subqueries also. Simple subquery will have sourcesCount == 2
@@ -2641,6 +2700,11 @@ namespace LinqToDB.SqlProvider
 
 					return false;
 				}
+				case QueryElementType.IsDistinctPredicate:
+				{
+					var expr = (SqlPredicate.IsDistinct)element;
+					return expr.Expr1.IsMutable() || expr.Expr2.IsMutable();
+				}
 				case QueryElementType.IsTruePredicate:
 				{
 					var isTruePredicate = (SqlPredicate.IsTrue)element;
@@ -2655,11 +2719,11 @@ namespace LinqToDB.SqlProvider
 				}
 				case QueryElementType.SearchStringPredicate:
 				{
-					var containsPredicate = (SqlPredicate.SearchString)element;
-					if (containsPredicate.Expr2.ElementType != QueryElementType.SqlValue)
+					var searchString = (SqlPredicate.SearchString)element;
+					if (searchString.Expr2.ElementType != QueryElementType.SqlValue)
 						return true;
 
-					return false;
+					return IsParameterDependedElement(searchString.CaseSensitive);
 				}
 				case QueryElementType.SqlFunction:
 				{

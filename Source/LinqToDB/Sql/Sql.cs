@@ -138,6 +138,36 @@ namespace LinqToDB
 			return value != null && (value.Value.CompareTo(low) < 0 || value.Value.CompareTo(high) > 0);
 		}
 
+		[Extension(typeof(IsDistinctBuilder), ServerSideOnly = false, PreferServerSide = false)]
+		public static bool IsDistinctFrom<T>(this T value, T other) => !EqualityComparer<T>.Default.Equals(value, other);
+
+		[Extension(typeof(IsDistinctBuilder), ServerSideOnly = false, PreferServerSide = false)]
+		public static bool IsDistinctFrom<T>(this T value, T? other) where T: struct => !EqualityComparer<T?>.Default.Equals(value, other);
+
+		[Extension(typeof(IsDistinctBuilder), Expression = "NOT", ServerSideOnly = false, PreferServerSide = false)]
+		public static bool IsNotDistinctFrom<T>(this T value, T other) => EqualityComparer<T>.Default.Equals(value, other);
+
+		[Extension(typeof(IsDistinctBuilder), Expression= "NOT", ServerSideOnly = false, PreferServerSide = false)]
+		public static bool IsNotDistinctFrom<T>(this T value, T? other) where T: struct => EqualityComparer<T?>.Default.Equals(value, other);
+
+		class IsDistinctBuilder : IExtensionCallBuilder
+		{
+			public void Build(Sql.ISqExtensionBuilder builder)
+			{
+				var left  = builder.GetExpression(0);
+				var right = builder.GetExpression(1);
+				var isNot = builder.Expression == "NOT";
+
+				SqlPredicate predicate = left.CanBeNull || right.CanBeNull
+					? new SqlPredicate.IsDistinct(left, isNot, right)
+					: new SqlPredicate.ExprExpr(left, isNot ? SqlPredicate.Operator.Equal : SqlPredicate.Operator.NotEqual, right, withNull: null);
+				
+				builder.ResultExpression = new SqlSearchCondition(
+					new SqlCondition(isNot: false, predicate)
+				);
+			}
+		}
+
 		/// <summary>
 		/// Allows access to entity property via name. Property can be dynamic or non-dynamic.
 		/// </summary>
@@ -410,6 +440,73 @@ namespace LinqToDB
 		[Property(PN.MySql,         "Char",           ServerSideOnly=true)]
 		[Property(                  "NVarChar",       ServerSideOnly=true)] public static string  DefaultNVarChar                          { get { return ""; } }
 
+		/// <summary>
+		/// Performs value conversion to specified type. If conversion failed, returns <c>null</c>.
+		/// Supported databases:
+		/// <list type="bullet">
+		/// <item>SQL Server 2012 or newer</item>
+		/// <item>Oracle 12.2 or newer (not all conversions possible, check Oracle's documentation on CAST expression)</item>
+		/// </list>
+		/// </summary>
+		/// <typeparam name="TFrom">Source value type.</typeparam>
+		/// <typeparam name="TTo">Target value type.</typeparam>
+		/// <param name="value">Value to convert.</param>
+		/// <param name="_">Unused. Added to support method overloads.</param>
+		/// <returns>Value, converted to target type or <c>null</c> if conversion failed.</returns>
+		[CLSCompliant(false)]
+		[Expression(PN.Oracle, "CAST({0} AS {3} DEFAULT NULL ON CONVERSION ERROR)", ServerSideOnly = true, IsNullable = IsNullableType.Nullable)]
+		[Function(             "TRY_CONVERT", 3, 0,                                 ServerSideOnly = true, IsNullable = IsNullableType.Nullable)]
+		public static TTo? TryConvert<TFrom, TTo>(TFrom value, TTo? _) where TTo : struct => throw new LinqException($"'{nameof(TryConvert)}' is only server-side method.");
+
+		/// <summary>
+		/// Performs value conversion to specified type. If conversion failed, returns <c>null</c>.
+		/// Supported databases:
+		/// <list type="bullet">
+		/// <item>SQL Server 2012 or newer</item>
+		/// <item>Oracle 12.2 or newer (not all conversions possible, check Oracle's documentation on CAST expression)</item>
+		/// </list>
+		/// </summary>
+		/// <typeparam name="TFrom">Source value type.</typeparam>
+		/// <typeparam name="TTo">Target value type.</typeparam>
+		/// <param name="value">Value to convert.</param>
+		/// <param name="_">Unused. Added to support method overloads.</param>
+		/// <returns>Value, converted to target type or <c>null</c> if conversion failed.</returns>
+		[CLSCompliant(false)]
+		[Expression(PN.Oracle, "CAST({0} AS {3} DEFAULT NULL ON CONVERSION ERROR)", ServerSideOnly = true, IsNullable = IsNullableType.Nullable)]
+		[Function(             "TRY_CONVERT", 3, 0,                                 ServerSideOnly = true, IsNullable = IsNullableType.Nullable)]
+		public static TTo? TryConvert<TFrom, TTo>(TFrom value, TTo? _) where TTo : class => throw new LinqException($"'{nameof(TryConvert)}' is only server-side method.");
+
+		/// <summary>
+		/// Performs value conversion to specified type. If conversion failed, returns value, specified by <paramref name="defaultValue"/> parameter.
+		/// Supported databases:
+		/// <list type="bullet">
+		/// <item>Oracle 12.2 or newer (not all conversions possible, check Oracle's documentation on CAST expression)</item>
+		/// </list>
+		/// </summary>
+		/// <typeparam name="TFrom">Source value type.</typeparam>
+		/// <typeparam name="TTo">Target value type.</typeparam>
+		/// <param name="value">Value to convert.</param>
+		/// <param name="defaultValue">Value, returned when conversion failed.</param>
+		/// <returns>Value, converted to target type or <paramref name="defaultValue"/> if conversion failed.</returns>
+		[CLSCompliant(false)]
+		[Expression("CAST({0} AS {3} DEFAULT {1} ON CONVERSION ERROR)", ServerSideOnly = true, IsNullable = IsNullableType.IfAnyParameterNullable)]
+		public static TTo? TryConvertOrDefault<TFrom, TTo>(TFrom value, TTo? defaultValue) where TTo : struct => throw new LinqException($"'{nameof(TryConvertOrDefault)}' is only server-side method.");
+
+		/// <summary>
+		/// Performs value conversion to specified type. If conversion failed, returns value, specified by <paramref name="defaultValue"/> parameter.
+		/// Supported databases:
+		/// <list type="bullet">
+		/// <item>Oracle 12.2 or newer (not all conversions possible, check Oracle's documentation on CAST expression)</item>
+		/// </list>
+		/// </summary>
+		/// <typeparam name="TFrom">Source value type.</typeparam>
+		/// <typeparam name="TTo">Target value type.</typeparam>
+		/// <param name="value">Value to convert.</param>
+		/// <param name="defaultValue">Value, returned when conversion failed.</param>
+		/// <returns>Value, converted to target type or <paramref name="defaultValue"/> if conversion failed.</returns>
+		[CLSCompliant(false)]
+		[Expression("CAST({0} AS {3} DEFAULT {1} ON CONVERSION ERROR)", ServerSideOnly = true, IsNullable = IsNullableType.IfAnyParameterNullable)]
+		public static TTo? TryConvertOrDefault<TFrom, TTo>(TFrom value, TTo? defaultValue) where TTo : class => throw new LinqException($"'{nameof(TryConvertOrDefault)}' is only server-side method.");
 		#endregion
 
 		#region String Functions
@@ -1323,6 +1420,28 @@ namespace LinqToDB
 			return value == null ? null : (double?) Math.Truncate(value.Value);
 		}
 
+		#endregion
+
+		#region Identity Functions
+		// identity APIs are internal as:
+		// - there is no plans to make them public for now
+		// - support for more providers required
+
+		/// <summary>
+		/// Returns last identity value (current value) for specific table.
+		/// </summary>
+		[Function  (PN.SqlServer    , "IDENT_CURRENT", ServerSideOnly = true)]
+		[Expression(PN.SqlServer2000, "NULL"         , ServerSideOnly = true)]
+		[Expression(                  "NULL"         , ServerSideOnly = true)]
+		internal static object? CurrentIdentity(string tableName) => throw new LinqException($"'{nameof(CurrentIdentity)}' is server side only property.");
+
+		/// <summary>
+		/// Returns identity step for specific table.
+		/// </summary>
+		[Function  (PN.SqlServer    , "IDENT_INCR", ServerSideOnly = true)]
+		[Expression(PN.SqlServer2000, "NULL"      , ServerSideOnly = true)]
+		[Expression(                  "NULL"      , ServerSideOnly = true)]
+		internal static object? IdentityStep(string tableName) => throw new LinqException($"'{nameof(IdentityStep)}' is server side only property.");
 		#endregion
 	}
 }
